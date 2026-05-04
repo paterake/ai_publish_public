@@ -1,6 +1,6 @@
 ---
 name: "sync-articles"
-description: "Copy article markdown files (and cover assets) from ../ai_publish/publication/ into this public repo. Invoke when user says 'sync articles for <module>', 'sync articles for <module> <implementation>', or 'sync articles for <module> root'."
+description: "Copy article markdown files (and cover assets) from ../ai_publish/publication/ into this public repo. Invoke when user says 'sync articles for <project>', 'sync articles for <project> <module>', or 'sync articles for <project> root'."
 ---
 
 # Skill: Sync Articles to Public Repo
@@ -22,21 +22,20 @@ a public repository.
 
 | User command | Scope |
 |---|---|
-| `sync articles for <module>` | All implementations + all root topics under `publication/<module>/` |
-| `sync articles for <module> <implementation>` | One implementation only |
-| `sync articles for <module> root` | All root topics under `publication/<module>/root/` |
-| `sync articles for <module> root <topic>` | One root topic only |
+| `sync articles for <project>` | All modules + all root topics under `publication/<project>/` |
+| `sync articles for <project> <module>` | One module only |
+| `sync articles for <project> root` | All root topics under `publication/<project>/root/` |
+| `sync articles for <project> root <topic>` | One root topic only |
 
 Example: `sync articles for ai_llm_rag elt_llm_explore`
 
 ---
 
 ## What to Copy
-
+### Modules
 ### Implementation modules
-
-**Source:** `../ai_publish/publication/<module>/<implementation>/articles/`
-**Target:** `publication/<module>/<implementation>/articles/`
+**Source:** `../ai_publish/publication/<project>/<module>/articles/`
+**Target:** `publication/<project>/<module>/articles/`
 
 Copy everything under `articles/` recursively. Typical structure:
 
@@ -48,11 +47,11 @@ articles/
 
 ### Root topics
 
-**Source:** `../ai_publish/publication/<module>/root/<topic>/articles/`
-**Target:** `publication/<module>/root/<topic>/articles/`
+**Source:** `../ai_publish/publication/<project>/root/<topic>/articles/`
+**Target:** `publication/<project>/root/<topic>/articles/`
 
-**Source assets:** `../ai_publish/publication/<module>/root/<topic>/assets/`
-**Target assets:** `publication/<module>/root/<topic>/assets/`
+**Source assets:** `../ai_publish/publication/<project>/root/<topic>/assets/`
+**Target assets:** `publication/<project>/root/<topic>/assets/`
 
 Copy `articles/` and `assets/` (if the assets directory exists in source).
 
@@ -74,58 +73,58 @@ Copy `articles/` and `assets/` (if the assets directory exists in source).
 ### Step 1 — Determine scope
 
 Parse the user's command to identify:
-- `<module>` — required (e.g., `ai_llm_rag`)
-- `<implementation>` — optional specific implementation (e.g., `elt_llm_explore`)
-- `root` — if present, target root topics instead of implementation modules
+- `<project>` — required (e.g., `ai_llm_rag`)
+- `<module>` — optional specific module (e.g., `elt_llm_explore`)
+- `root` — if present, target root topics instead of modules
 - `<topic>` — optional specific root topic (e.g., `above_the_loop`)
 
 ### Step 2 — Enumerate targets
 
-**Full module sync** (`sync articles for <module>`):
-1. List all implementation directories: `../ai_publish/publication/<module>/*/`
+**Full project sync** (`sync articles for <project>`):
+1. List all module directories: `../ai_publish/publication/<project>/*/`
    - Exclude `root/` and `docs/` from enumeration
-2. List all root topics: `../ai_publish/publication/<module>/root/*/`
+2. List all root topics: `../ai_publish/publication/<project>/root/*/`
 
 **Targeted sync:**
-- Single implementation: `../ai_publish/publication/<module>/<implementation>/`
-- Root only: all entries under `../ai_publish/publication/<module>/root/`
-- Single root topic: `../ai_publish/publication/<module>/root/<topic>/`
+- Single module: `../ai_publish/publication/<project>/<module>/`
+- Root only: all entries under `../ai_publish/publication/<project>/root/`
+- Single root topic: `../ai_publish/publication/<project>/root/<topic>/`
 
 ### Step 3 — Create destination directories
 
 Before copying, ensure destination directories exist:
 
 ```bash
-mkdir -p publication/<module>/<implementation>/articles
+mkdir -p publication/<project>/<module>/articles
 # or
-mkdir -p publication/<module>/root/<topic>/articles
+mkdir -p publication/<project>/root/<topic>/articles
 ```
 
 ### Step 4 — Copy articles
 
-**For each implementation module:**
+**For each module:**
 
 ```bash
 rsync -av \
-  ../ai_publish/publication/<module>/<implementation>/articles/ \
-  publication/<module>/<implementation>/articles/
+  ../ai_publish/publication/<project>/<module>/articles/ \
+  publication/<project>/<module>/articles/
 ```
 
 **For each root topic:**
 
 ```bash
 rsync -av \
-  ../ai_publish/publication/<module>/root/<topic>/articles/ \
-  publication/<module>/root/<topic>/articles/
+  ../ai_publish/publication/<project>/root/<topic>/articles/ \
+  publication/<project>/root/<topic>/articles/
 ```
 
 If `assets/` exists at source, also copy it:
 
 ```bash
-if [ -d "../ai_publish/publication/<module>/root/<topic>/assets" ]; then
+if [ -d "../ai_publish/publication/<project>/root/<topic>/assets" ]; then
   rsync -av \
-    ../ai_publish/publication/<module>/root/<topic>/assets/ \
-    publication/<module>/root/<topic>/assets/
+    ../ai_publish/publication/<project>/root/<topic>/assets/ \
+    publication/<project>/root/<topic>/assets/
 fi
 ```
 

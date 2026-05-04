@@ -31,21 +31,21 @@ this repo — edit in `ai_publish`, then re-sync using the `sync-articles` skill
 ## What is here
 
 ```
-publication/<module>/<implementation>/articles/
+publication/<project>/<module>/articles/
   medium/     ← long-form Medium drafts
   linkedin/   ← companion LinkedIn posts
 
-publication/<module>/root/<topic>/articles/
+publication/<project>/root/<topic>/articles/
   medium/     ← long-form Medium drafts
   linkedin/   ← companion LinkedIn posts
 
-publication/<module>/root/<topic>/assets/
+publication/<project>/root/<topic>/assets/
   *.png       ← cover images (synced alongside articles)
 ```
 
-Current modules:
+Current projects:
 
-| Module | Source |
+| Project | Source |
 |--------|--------|
 | `ai_llm_rag` | `../ai_publish/publication/ai_llm_rag/` |
 
