@@ -25,13 +25,11 @@ No cloud LLM APIs. No cloud embeddings. No managed vector databases. Everything 
 The consequence is a deliberate substitution across the entire stack. Every component that a
 standard AI tutorial assumes is a cloud service has a local equivalent:
 
-| Standard tutorial assumption | This platform |
-|------------------------------|---------------|
-| OpenAI / Anthropic API | Ollama — local inference runtime |
-| OpenAI embeddings API | nomic-embed-text via Ollama |
-| Pinecone / Weaviate | ChromaDB — local vector store |
-| AWS Textract / Google Document AI | Docling — local PDF extraction |
-| Neo4j cloud | NetworkX — in-memory graph |
+- **OpenAI / Anthropic API** → Ollama — local inference runtime
+- **OpenAI embeddings API** → nomic-embed-text via Ollama
+- **Pinecone / Weaviate** → ChromaDB — local vector store
+- **AWS Textract / Google Document AI** → Docling — local PDF extraction
+- **Neo4j cloud** → NetworkX — in-memory graph
 
 These are not workarounds. The constraint forces a more disciplined system: every dependency is explicit, every operation is repeatable, and you can run end-to-end without network access.
 
@@ -102,11 +100,9 @@ This gives you two properties most demos never have:
 
 If you take nothing else from this article, take this. Most AI systems are unreliable because they ask the model to do everything.
 
-| Need | Preferred approach | Why |
-|------|--------------------|-----|
-| Exact lookups, joins, schema-driven extraction | Deterministic artefacts (structured JSON) | Precise, low-cost, auditable |
-| Finding relevant evidence in unstructured sources | Retrieval substrate (BM25 + vectors) | Best balance of exact and semantic recall |
-| Turning evidence into a usable answer | LLM synthesis over retrieved context | Human-readable output, grounded in cited evidence |
+- **Exact lookups, joins, schema-driven extraction** → Deterministic artefacts (structured JSON) — precise, low-cost, auditable
+- **Finding relevant evidence in unstructured sources** → Retrieval substrate (BM25 + vectors) — best balance of exact and semantic recall
+- **Turning evidence into a usable answer** → LLM synthesis over retrieved context — human-readable output, grounded in cited evidence
 
 Once you enforce that boundary, a lot of other engineering decisions become obvious.
 
@@ -150,12 +146,10 @@ This is not a “better prompt” story. It is a “stop treating the model as t
 
 Here are four failure modes that show up quickly in real environments, and the platform discipline that prevents each one:
 
-| Failure mode | What it looks like | Platform discipline that prevents it |
-|--------------|--------------------|--------------------------------------|
-| Silent coverage gaps | The system answers confidently, but the relevant evidence was never retrieved | Treat coverage as a first-class concern (deep dive in Article 2) |
-| Plausible boilerplate | The answer reads well but contains no real content | Require outputs to pass an explicit quality bar (deep dive in Article 3) |
-| Unbounded loops | “Autonomy” becomes cost and latency runaway | Enforce bounded execution: budgets, timeouts, and stop conditions |
-| One-off runs | The demo works once, then nobody can reproduce it | Build like a data pipeline: repeatable runs and durable artefacts |
+- **Silent coverage gaps** — the system answers confidently, but the relevant evidence was never retrieved. Fix: treat coverage as a first-class concern (deep dive in Article 2).
+- **Plausible boilerplate** — the answer reads well but contains no real content. Fix: require outputs to pass an explicit quality bar (deep dive in Article 3).
+- **Unbounded loops** — “autonomy” becomes cost and latency runaway. Fix: enforce bounded execution: budgets, timeouts, and stop conditions.
+- **One-off runs** — the demo works once, then nobody can reproduce it. Fix: build like a data pipeline: repeatable runs and durable artefacts.
 
 This article keeps those principles at the level of system design. If you want the deep dives, each component also has its own write-up.
 
