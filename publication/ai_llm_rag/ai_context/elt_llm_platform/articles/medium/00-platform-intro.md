@@ -1,0 +1,224 @@
+# What Building With AI Looks Like When the Data Can’t Leave the Machine
+
+A data engineering lens on local-first AI: not the demo, the production architecture.
+
+The pitch is always the same: give the AI your documents, ask questions, get answers. Five minutes to a working demo. Everyone has seen it.
+
+Most people building over sensitive or governed data have also seen the demo fall apart the moment you ask for the things production systems actually need: auditability, repeatability, and the ability to say “not found” without guessing.
+
+This is what comes after the demo.
+
+## Key takeaways
+
+- Local-first constraints change the architecture: no data egress means no cloud APIs, no managed infrastructure, and no hand-waving.
+- Treat the LLM as a component, not the system: deterministic paths first, AI last, with quality gates between them.
+- Optimise for auditability: every output should be traceable to inputs and sources, or rejected explicitly.
+
+---
+
+## The Constraint That Changed Everything
+
+I build AI systems in environments where the data cannot leave the machine. Not “it would be nice if it didn’t” — it simply cannot. That single constraint rules out most of what standard AI tooling assumes.
+
+No cloud LLM APIs. No cloud embeddings. No managed vector databases. Everything has to run locally, with local inference, and with a clear evidence trail.
+
+The consequence is a deliberate substitution across the entire stack. Every component that a
+standard AI tutorial assumes is a cloud service has a local equivalent:
+
+| Standard tutorial assumption | This platform |
+|------------------------------|---------------|
+| OpenAI / Anthropic API | Ollama — local inference runtime |
+| OpenAI embeddings API | nomic-embed-text via Ollama |
+| Pinecone / Weaviate | ChromaDB — local vector store |
+| AWS Textract / Google Document AI | Docling — local PDF extraction |
+| Neo4j cloud | NetworkX — in-memory graph |
+
+These are not workarounds. The constraint forces a more disciplined system: every dependency is explicit, every operation is repeatable, and you can run end-to-end without network access.
+
+Most people treat this as a limitation. I treated it as a design requirement. The architecture
+you build when everything is local is stricter, more auditable, and — it turns out — more
+reliable than the architecture you build when you can throw API calls at the problem.
+
+---
+
+## The Same Lesson, Applied to AI
+
+I have been building data systems for decades. The lesson that repeats is simple:
+
+**The systems that last are the ones where every decision is auditable.**
+
+Not "the LLM said so." Not "the model returned this." Every classification decision, every
+retrieval call, every enrichment output — traceable to a source, reproducible from an input,
+rejectable by a quality gate.
+
+AI does not change that. It raises the cost of ignoring it.
+
+The LLM is not “the system”. It is a component inside a system that still needs the boring fundamentals: bounded execution, resumable runs, stable output contracts, and observability that makes failures explicit.
+
+This is not a novel insight. It is thirty years of data engineering applied to a new problem.
+
+---
+
+## What This Platform Actually Is
+
+It is a local-first knowledge platform that turns documents into structured artefacts you can query and audit.
+
+Two design boundaries shape everything:
+
+- Deterministic artefacts for anything structured (exact lookups, joins, contracts)
+- Retrieval and synthesis for anything unstructured (search, cite, explain)
+
+Everything is config-driven: the control surface is configuration profiles, not scripts.
+
+That point sounds like a stylistic preference until you build more than one workload.
+The moment you have to swap corpora, adjust retrieval breadth, change a reranking pool, tighten a quality gate, or bound an agentic loop, you want those decisions to be explicit and reviewable.
+In this platform, those decisions live in configuration as a small set of named profiles and overrides.
+
+---
+
+## The Shape of the System
+
+Most “RAG platform” write-ups jump straight to prompts. This one starts with the system shape: separate responsibilities, stable outputs, and a clear build chain.
+
+```
+Core primitives
+  └─ Ingestion + query layer
+       └─ Retrieval + relationship layer
+            └─ Orchestrator
+                 ├─ MCP server (developer + assistant tools)
+                 └─ HTTP agent (business-user surface)
+
+Optional API/UI surface (built on the same query layer)
+```
+
+This gives you two properties most demos never have:
+
+- You can run long batch pipelines as jobs, resume them, and get deterministic artefacts out the other side.
+- You can expose the same underlying knowledge base through different query surfaces without rewriting the orchestration.
+
+---
+
+## Decision Boundary: Deterministic vs Retrieval vs Synthesis
+
+If you take nothing else from this article, take this. Most AI systems are unreliable because they ask the model to do everything.
+
+| Need | Preferred approach | Why |
+|------|--------------------|-----|
+| Exact lookups, joins, schema-driven extraction | Deterministic artefacts (structured JSON) | Precise, low-cost, auditable |
+| Finding relevant evidence in unstructured sources | Retrieval substrate (BM25 + vectors) | Best balance of exact and semantic recall |
+| Turning evidence into a usable answer | LLM synthesis over retrieved context | Human-readable output, grounded in cited evidence |
+
+Once you enforce that boundary, a lot of other engineering decisions become obvious.
+
+---
+
+## What the Platform Does
+
+Five components, each designed as an engineering surface you can reason about and operate.
+
+**Classification at scale.**
+~63k records classified locally with the LLM as a last resort, not the first call: a reuse ladder that treats “don’t call the model” as the default. High auto-accept rate, explicit human-review lane, and an audit trail for every decision.
+
+**Queryable knowledge base from governance documents.**
+Structured extraction, careful chunking, hybrid retrieval (BM25 + vectors), fusion, and reranking. The key lesson: treat retrieval breadth as a coverage problem before you treat it as a ranking problem.
+
+**Quality-gated retrieval with self-correction.**
+Single-pass RAG returns boilerplate for sparse entities. For roughly half of 175 enterprise
+architecture model entities, the standard approach returned:
+
+> "This is an important concept in enterprise governance. It relates to the organisation's
+> operational framework and compliance requirements."
+
+Technically fluent. Zero information content. The fix: a quality gate after every synthesis,
+and an agentic fallback loop that only triggers when the gate fails. 169/175 entities enriched.
+6 correctly flagged "not found" — the honest result, not a hallucination.
+
+**Knowledge graph for relationship queries.**
+RAG answers "what is X?" It cannot reliably answer "what governs X?" or "show me the chain
+from A to B." The answer is not more prompt engineering. It is a different substrate: a typed
+knowledge graph built deterministically from the audited catalogs the platform already produces.
+894 nodes. 772 edges. Traversal queries in milliseconds.
+
+**Two query surfaces.**
+The same underlying knowledge exposed through a developer/assistant surface and a business-user surface, both governed by the same orchestration and constraints.
+
+---
+
+## Where RAG Fails in Production (and What We Do Instead)
+
+This is not a “better prompt” story. It is a “stop treating the model as the whole system” story.
+
+Here are four failure modes that show up quickly in real environments, and the platform discipline that prevents each one:
+
+| Failure mode | What it looks like | Platform discipline that prevents it |
+|--------------|--------------------|--------------------------------------|
+| Silent coverage gaps | The system answers confidently, but the relevant evidence was never retrieved | Treat coverage as a first-class concern (deep dive in Article 2) |
+| Plausible boilerplate | The answer reads well but contains no real content | Require outputs to pass an explicit quality bar (deep dive in Article 3) |
+| Unbounded loops | “Autonomy” becomes cost and latency runaway | Enforce bounded execution: budgets, timeouts, and stop conditions |
+| One-off runs | The demo works once, then nobody can reproduce it | Build like a data pipeline: repeatable runs and durable artefacts |
+
+This article keeps those principles at the level of system design. If you want the deep dives, each component also has its own write-up.
+
+---
+
+## What Makes This Production-Grade (Not Just “RAG”)
+
+The difference is not the prompt. It is the discipline around the model:
+
+- **Deterministic first, AI last:** exact and schema-driven routes before any model call; the model is a last resort.
+- **LLMOps discipline as baseline:** bounded execution (budgets, timeouts, degrade paths) plus structured telemetry and trace correlation so regressions are visible.
+- **Data engineering convergence:** idempotent, resumable pipelines with stable output contracts and durable artefacts; no “start over” runs.
+- **OSS before custom:** use the recognised primitives (retries, circuit breaking, evaluation, guardrails) so you are not debugging your own infrastructure.
+
+This is also why the “autonomy” story is constrained. The model can help decide how to search, but it does not get to decide what counts as a valid output.
+Outputs are bounded by:
+
+- explicit budgets and timeouts
+- quality gates that reject boilerplate
+- stable output contracts for downstream consumers
+- observability that makes silent failure visible (instead of letting it quietly degrade)
+
+If you have ever run a long batch job overnight, you already understand the shape of the problem. AI just makes the failure modes more subtle.
+
+---
+
+## The Transferable Lesson
+
+Everything here is config-driven. The taxonomy lives in YAML. The prompts live in
+YAML. The thresholds live in YAML. Switching from incident records to legal contracts, from a
+governance handbook to a product manual, requires no code changes.
+
+The architecture is not clever. It is disciplined. The LLM handles what only the LLM can
+handle. Everything else is deterministic.
+
+You do not need what I have access to. You need the same discipline applied to your constraints.
+
+That is the point.
+
+---
+
+## Who This Is For
+
+You are a data engineer, software engineer, or architect who is building — or about to build —
+an AI system over sensitive or complex data. You have already hit the limits of the demo.
+You want to know what the production architecture looks like.
+
+Each component has its own deep dive: the decision that shaped it, the failure that
+forced the design, the proof that it worked.
+
+---
+
+## Repro Notes
+
+The platform is deliberately offline-capable: local inference, local embeddings, local stores.
+The point is not to make a benchmark claim; it is to show an architecture that still works when the network is not part of your control surface.
+
+Ollama runs both generation and embeddings locally, so the model, embeddings, and data stay on the machine and the hot path has no external dependency.
+
+- All components run on Apple M3 Pro MacBook, 18GB RAM
+- Local inference throughout: Ollama (`qwen2.5:7b`), embeddings `nomic-embed-text`
+- Zero cloud dependencies, zero data egress
+- Dataset classes: enterprise incident backlog, internal governance handbook,
+  enterprise architecture model (all anonymised; no client identifiers)
+- Non-reproducible from this write-up: exact taxonomies, proprietary document content,
+  internal architecture model schemas

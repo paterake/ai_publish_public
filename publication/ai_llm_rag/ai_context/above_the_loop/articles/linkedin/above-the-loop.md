@@ -31,4 +31,4 @@ Example gate: if a change crosses an interface boundary, the contract check fail
 
 Question: which rule in your workflow would you stop relying on “remembering”, and turn into a gate?
 
-#AIEngineering #SoftwareEngineering #DeveloperTools #AI #Productivity
+#AI #AIEngineering #SoftwareEngineering #ClaudeCode #Trae

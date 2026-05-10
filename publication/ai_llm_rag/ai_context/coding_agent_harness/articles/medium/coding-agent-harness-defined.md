@@ -1,0 +1,142 @@
+# Agent = Model + Harness: What a Coding Agent Harness Actually Is
+
+*Claude Code and Cursor are not interfaces for talking to AI. They are operating systems for AI work — and the operating system determines the output.*
+
+---
+
+I run three AI coding assistants on the same project: Claude Code, Trae, and Qwen. I added the second tool expecting that two perspectives would catch more issues. Within a week, I had something I didn't expect: the same task producing different results depending on which tool was active.
+
+Not dramatically different — subtly wrong. The second assistant built code that looked correct, compiled cleanly, and violated a constraint I thought was in place. The constraint was real. The documentation was accurate. The problem was simpler and more structural: the rule lived in a directory the second tool couldn't see.
+
+That is a harness problem. Not a model problem, not a documentation problem — a harness problem. And it took me longer than it should have to understand why, because I was still thinking of these tools as "AI coding assistants with different interfaces." They are not. They are harnesses. Understanding the distinction changes how you build with them.
+
+## Key takeaways
+
+→ A coding agent harness is everything the model needs to do structured, repeatable work: context loading, tool access, orchestration, execution hooks, permission scoping, memory management, and session lifecycle.
+→ The model sets the ceiling on output quality. The harness sets the floor.
+→ Understanding the harness as an operating system changes how you configure it — and explains why configuration drift between tools produces failures that look like model inconsistency.
+
+## Who this is for
+
+Engineers using one or more AI coding assistants — Claude Code, Cursor, Trae, Copilot — who have noticed inconsistent results across sessions or tools and are unsure whether to blame the model, the prompting, or the setup.
+
+## What you'll learn
+
+→ What a coding agent harness is, structurally, with Claude Code and Trae as concrete examples
+→ The seven components every harness provides and why each one matters
+→ Why the harness has more leverage over output quality than the model itself
+
+---
+
+## The chat interface illusion
+
+Most engineers, when they first use Claude Code or Cursor, treat them as capable chat interfaces: you describe a task, the AI produces code, you review and apply it. The tool is a delivery mechanism for the model's output.
+
+This model is partially accurate and entirely misleading.
+
+It is accurate in the sense that yes, there is a model, and yes, you are communicating with it. It is misleading because it attributes almost all of the work — and almost all of the variance — to the model. Every time the output surprises you (positively or negatively), you adjust the model or the prompt. You switch tools hoping for a smarter model. You tune your system prompt hoping for more reliable behaviour.
+
+Most of that variance is not coming from the model. It is coming from the harness.
+
+---
+
+## Agent = Model + Harness
+
+Every AI coding agent has the same two-part structure:
+
+**Agent = Model + Harness**
+
+The model is the cognitive substrate — the neural network that processes text and generates tokens. It is powerful, but it is also stateless, toolless, and context-limited. Left alone, it can answer questions in a chat window. It cannot read your codebase, write files, run tests, or remember what it did last session.
+
+The harness is everything else. It is the infrastructure that transforms a stateless language model into a productive coding agent. Think of it as the operating system for AI work. The model is the CPU: raw computational capability. Without an OS — memory management, I/O, process isolation, scheduling — a CPU cannot usefully interact with files, networks, or users. The harness is the OS layer: it gives the model a structured environment in which to operate, and it manages every interaction between the model and the world outside it.
+
+Claude Code is a harness. Trae is a harness. Cursor is a harness. They wrap different models (or the same model under different configurations), but structurally they are all doing the same job: taking raw model capability and making it applicable to real work.
+
+---
+
+## The seven components of a coding agent harness
+
+The harness is not a single piece of infrastructure. It is a stack of layered capabilities. Every AI coding harness — regardless of which model it wraps — provides some version of these seven components.
+
+**1. Context loading**
+
+Before the model acts on any task, the harness injects context: project rules, architectural constraints, workflow instructions, tool-specific guidance. CLAUDE.md in Claude Code is the entry point for this layer. What the model can see when it starts determines what it can do. Context loading is not a chat history — it is a structured brief the harness prepares before every session, every time.
+
+**2. Tool layer**
+
+The model cannot natively read files, run shell commands, or call external APIs. The harness provides a vocabulary of tools the model can invoke: read, write, edit, search, execute, fetch. Each tool call is mediated by the harness — the model requests the action; the harness decides whether to execute it, how to execute it, and what to return.
+
+**3. Orchestration**
+
+Complex tasks require multiple agents or multiple steps. The harness manages the spawning of subagents — independent model instances with isolated contexts — the routing of tasks between them, and the sequencing of work. This is what distinguishes a harness from a chat client: a chat client relays one message at a time; a harness can run parallel workstreams and synthesise the results.
+
+**4. Execution hooks**
+
+The most underappreciated component. Hooks are deterministic code that runs before or after model-initiated actions — not suggestions or guidelines, but enforced execution gates. A hook can intercept a file write, validate the output against a schema, block the action if it fails, and return a structured error to the model. Hooks convert a probabilistic model into a system that behaves predictably at critical decision points. They are the enforcement layer — the part of the harness the model cannot override.
+
+**5. Permission layer**
+
+The harness defines what the model can and cannot do: which directories it may write to, which commands it may execute, whether it may access the network. This is the operating envelope. A model that can delete production files without restriction is not a safe coding agent. The permission layer is what makes bounded autonomy possible: the model can act independently within a defined scope, and that scope is enforced by the harness, not by the model's self-restraint.
+
+**6. Memory and state management**
+
+A language model has no memory between sessions. The harness manages the persistence layer: what state carries forward, how context is compacted when it grows too large, how memory from previous sessions is loaded at startup. Without this layer, every session starts from scratch. Every rule, every constraint, every project convention has to be re-established from the beginning.
+
+**7. Session lifecycle**
+
+The harness manages the boundaries of work: how a session starts, how context is initialised, how tasks are handed off between sessions, how the model signals task completion. This is what allows multi-session work to be coherent rather than a series of disconnected interactions — what makes it possible to pick up a task interrupted three days ago without losing the thread.
+
+---
+
+## The amplifier: why the harness has more leverage than the model
+
+Here is the counter-intuitive claim that should change how you invest in your AI coding setup.
+
+The model sets the ceiling on output quality. The harness sets the floor.
+
+A model without a governed harness is capable but inconsistent. It can produce excellent code in one session and surprisingly poor code in the next, on tasks of identical difficulty. Some of that variance comes from the model. But most of the structural variance — the kind that makes you feel like the tool "doesn't know the rules" — comes from an underthin harness: context that isn't loaded, hooks that aren't in place, permissions that aren't scoped, memory that isn't persistent.
+
+A governed harness with a moderate model consistently outperforms an ungoverned harness with a stronger model on structured work. Raising the model's ceiling only helps if the harness floor is already high enough to reach it.
+
+This is the insight that makes "Claude Code versus Cursor" the wrong debate for most teams. Both are capable harnesses wrapping capable models. The question is not which harness is smarter. The question is what governance layer is directing the harness — and whether that governance layer transfers when you switch tools.
+
+---
+
+## Two harnesses, one governance layer
+
+Running multiple AI coding assistants on the same project makes the harness structure visible in a way that a single-tool setup cannot.
+
+Each tool reads a different configuration format. Each has a different hook syntax. Each has a different permission system. And yet — across three assistants on this project — the same constraints hold, the same workflow triggers fire, and the same architectural rules are enforced. Not because each tool was tuned separately, but because the governance layer lives once, in a shared directory, and each assistant's configuration points to the same source.
+
+The harness reads the governance layer. The governance layer does not care which harness reads it.
+
+That is the structural implication of understanding what a harness is: the governance layer and the harness are separable. The harness executes; the governance directs. The harness is the vehicle; the governance is the instruction set.
+
+---
+
+## What changes when you understand this
+
+When you understand a coding agent harness as an operating system — not a chat interface — configuration decisions that previously seemed like minor tweaks become architectural decisions.
+
+What you load into context at session start is not a system prompt. It is the brief the OS gives the process before it runs.
+
+The hooks you configure are not optional enhancements. They are the deterministic enforcement layer that converts a probabilistic model into a predictable system.
+
+The permission scope you define is not a safety nicety. It is the operating envelope that makes autonomous execution trustworthy.
+
+The governance content you put into the harness is not documentation. It is the instruction set the OS executes every time the model acts.
+
+Most engineers frustrated with inconsistent AI coding results are trying to fix the model when they should be fixing the operating system.
+
+---
+
+## Limits
+
+This article defines what a harness is. It does not cover:
+
+- How to architect the governance layer that the harness executes — that is the subject of the companion series on governing AI coding assistants.
+- The strategic case for investing in governance rather than the harness itself — covered in a companion piece on where AI investment actually compounds.
+- How to configure multiple assistants so they share a single governance layer without drift — covered in the multi-assistant tooling article.
+- Memory stratification and cross-session continuity — covered in the memory stratification piece.
+
+If you are using a single AI coding assistant and want to start somewhere: audit what your harness loads at session start. That is where most of the structural variance in your output comes from.
