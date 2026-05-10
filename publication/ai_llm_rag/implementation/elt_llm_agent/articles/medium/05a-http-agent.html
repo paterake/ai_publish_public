@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The HTTP Knowledge Base Agent (Audit Trail First)</h1>
+<p>A fluent answer without an audit trail is a demo. Users need the tool calls and the evidence, not just the response. This is how to build an HTTP agent that returns traces and sources alongside every answer.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>An agent surface without tool tracing is a demo. Return the ordered tool call list and sources as first-class fields alongside every answer.</li>
+<li>Route to the cheapest correct source first: deterministic catalog lookups and graph traversal before RAG, because RAG adds LLM variance with no benefit when the answer is already extracted.</li>
+<li>A RAG tool call may itself invoke an LLM for synthesis — combined with agent synthesis, one user question can produce multiple LLM calls. Track this as an explicit cost, not a surprise.</li>
+</ul>
+<p>The first naive implementation is also the fastest way to destroy trust: a fluent answer, no evidence, no way
+to tell what the system actually did, and no way to diagnose why it failed.</p>
+<p>This article is the story of building an audit-first agent surface over a multi-source knowledge base:</p>
+<ul>
+<li>deterministic catalogs and record lookups</li>
+<li>graph traversal queries</li>
+<li>RAG queries with explicit sources</li>
+</ul>
+<p>All routed through bounded tools, and returned with a trace of what happened.</p>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+</ul>
+<h2>Why a Useful Agent Must Be Debuggable</h2>
+<p>If you can’t answer these questions, you don’t have a usable system:</p>
+<ul>
+<li>which tool was called, in what order?</li>
+<li>what evidence was used?</li>
+<li>what did the system do when evidence was missing?</li>
+<li>how do you reproduce the result?</li>
+</ul>
+<p>Most “agent demos” don’t even try to answer them. That’s fine for a demo. It is not fine for a real system.</p>
+<h2>What most teams try first: One Big Prompt and a Hope</h2>
+<p>The naive design is:</p>
+<ol>
+<li>retrieve some chunks</li>
+<li>ask the model to answer</li>
+<li>print the answer</li>
+</ol>
+<p>It fails in two predictable ways:</p>
+<ul>
+<li>it guesses when retrieval is incomplete</li>
+<li>it becomes impossible to debug when the user challenges the answer</li>
+</ul>
+<p>Even adding citations doesn’t solve this if you can’t show the decision path the system took.</p>
+<h2>How the solution works: A Tool-Calling Router with an Audit Trail</h2>
+<p>Instead of treating the model as the system, treat it as a router over bounded tools:</p>
+<p><strong>Source type — Tool — Best for</strong></p>
+<ul>
+<li><strong><code>json</code></strong> — <code>lookup_entity</code> — Deterministic entity records — definition already extracted; low latency, zero LLM variance</li>
+<li><strong><code>rag</code></strong> — <code>query_knowledge_base</code> — Unstructured governance or policy text; requires semantic retrieval and synthesis</li>
+<li><strong><code>graph</code></strong> — <code>query_graph</code> — Relationship chains, neighbours, governance paths — O(hops), not O(chunks)</li>
+</ul>
+<p>The routing model matters for cost. A governance chain query goes directly to the graph — no synthesis call, result in milliseconds. A catalog lookup reads a JSON record — no embedding, no model. RAG is the right tool when the question requires evidence synthesis across multiple chunks. Everything else should be answered without it.</p>
+<p><strong>One user question can trigger multiple LLM calls.</strong> The RAG tool invokes the retrieval + synthesis pipeline — that is one LLM call. The agent then synthesises the final response from the tool output — that is a second. On a busy question this is expected behaviour, but it must be tracked explicitly as a cost, not discovered as a surprise in telemetry. The architecture documents this as an optimisation target: a retrieve-context-only path that skips agent synthesis for direct record lookups.</p>
+<p>The output is not only “an answer”. It is:</p>
+<ul>
+<li>the ordered tool call list</li>
+<li>the sources returned by those tools</li>
+<li>the final response grounded in those sources</li>
+</ul>
+<p>This is what makes the interface safe for non-technical consumers: the system can explain itself.</p>
+<h2>Result: A Consumer-Facing Surface Over the Same Engine</h2>
+<p>With the orchestration layer stable, the HTTP agent becomes one surface among several. It is not a separate
+system. It is a different contract for a different audience.</p>
+<p>Proof points to capture before publishing:
+- Publish-safe response envelope (contract-level shape):</p>
+<pre><code class="language-json">{
+  &quot;answer&quot;: &quot;…&quot;,
+  &quot;tool_calls&quot;: [&quot;lookup_json_record&quot;, &quot;query_rag&quot;],
+  &quot;sources&quot;: [
+    { &quot;tool&quot;: &quot;lookup_json_record&quot;, &quot;record&quot;: { &quot;entity_name&quot;: &quot;Role&quot;, &quot;formal_definition&quot;: &quot;…&quot; } },
+    { &quot;tool&quot;: &quot;query_rag&quot;, &quot;metadata&quot;: { &quot;collection&quot;: &quot;governance_handbook_s07&quot;, &quot;document_id&quot;: &quot;…&quot; }, &quot;score&quot;: 0.82 }
+  ]
+}
+</code></pre>
+<ul>
+<li>[NEEDS_DATA: measured latency/concurrency result with run conditions]</li>
+</ul>
+<h2>Architecture Decisions Summary</h2>
+<p><strong>Decision — Alternative Considered — Why This</strong></p>
+<ul>
+<li><strong>Tool-calling agent with explicit routing</strong> — Single-prompt synthesis over all sources — Routing makes tool calls traceable; single prompt cannot attribute which source drove the answer</li>
+<li><strong>Tool output returned as first-class API fields</strong> — Return only the final answer — Consumers and downstream systems need the audit trail; answer-only is a demo contract</li>
+<li><strong>JSON and graph sources routed before RAG</strong> — RAG for all questions — Deterministic sources have zero LLM variance and millisecond latency — no benefit in RAG for structured records</li>
+<li><strong>Bounded tool set (allowlisted)</strong> — Open tool surface — Prevents the agent from taking unintended actions; essential for consumer-facing deployment</li>
+<li><strong>run_id per request, propagated through tool calls</strong> — Per-module logging only — Cross-tool correlation requires a shared identifier — without it, a multi-tool trace is unjoined fragments</li>
+<li><strong>Explicit "not found" outcome</strong> — Force an answer — Forcing an answer on missing evidence is a trust failure; the system must surface gaps as gaps</li>
+</ul>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>An agent surface without authentication, rate limiting, and auditing is not production-safe.</li>
+<li>The system must support “not found” outcomes; forcing an answer is a trust failure.</li>
+<li>Tool routers can still drift without contract discipline; the interface must remain bounded and debuggable.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; catalog cards <code>{json, rag, graph}</code> enabled; sources returned as first-class output; local inference</li>
+<li>Dataset class: internal governance handbook + enterprise architecture model (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>The Lesson</h2>
+<p>An agent is not a “smart answer machine”.</p>
+<p>It is a bounded operator surface:</p>
+<ul>
+<li>contracts first</li>
+<li>evidence first</li>
+<li>audit trail always</li>
+</ul>
+<p>That’s how you build something people can trust, and how you keep the system debuggable when it inevitably
+hits edge cases.</p>
+
+</body>
+</html>
