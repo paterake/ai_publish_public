@@ -18,13 +18,20 @@
 <p>No cloud LLM APIs. No cloud embeddings. No managed vector databases. Everything has to run locally, with local inference, and with a clear evidence trail.</p>
 <p>The consequence is a deliberate substitution across the entire stack. Every component that a
 standard AI tutorial assumes is a cloud service has a local equivalent:</p>
-<ul>
-<li><strong>OpenAI / Anthropic API</strong> → Ollama — local inference runtime</li>
-<li><strong>OpenAI embeddings API</strong> → nomic-embed-text via Ollama</li>
-<li><strong>Pinecone / Weaviate</strong> → ChromaDB — local vector store</li>
-<li><strong>AWS Textract / Google Document AI</strong> → Docling — local PDF extraction</li>
-<li><strong>Neo4j cloud</strong> → NetworkX — in-memory graph</li>
-</ul>
+<pre><code>+-----------------------------------+----------------------------------+
+| Standard tutorial assumption      | This platform                    |
++===================================+==================================+
+| OpenAI / Anthropic API            | Ollama — local inference runtime |
++-----------------------------------+----------------------------------+
+| OpenAI embeddings API             | nomic-embed-text via Ollama      |
++-----------------------------------+----------------------------------+
+| Pinecone / Weaviate               | ChromaDB — local vector store    |
++-----------------------------------+----------------------------------+
+| AWS Textract / Google Document AI | Docling — local PDF extraction   |
++-----------------------------------+----------------------------------+
+| Neo4j cloud                       | NetworkX — in-memory graph       |
++-----------------------------------+----------------------------------+
+</code></pre>
 <p>These are not workarounds. The constraint forces a more disciplined system: every dependency is explicit, every operation is repeatable, and you can run end-to-end without network access.</p>
 <p>Most people treat this as a limitation. I treated it as a design requirement. The architecture
 you build when everything is local is stricter, more auditable, and — it turns out — more
@@ -67,11 +74,16 @@ Optional API/UI surface (built on the same query layer)
 </ul>
 <h2>Decision Boundary: Deterministic vs Retrieval vs Synthesis</h2>
 <p>If you take nothing else from this article, take this. Most AI systems are unreliable because they ask the model to do everything.</p>
-<ul>
-<li><strong>Exact lookups, joins, schema-driven extraction</strong> → Deterministic artefacts (structured JSON) — precise, low-cost, auditable</li>
-<li><strong>Finding relevant evidence in unstructured sources</strong> → Retrieval substrate (BM25 + vectors) — best balance of exact and semantic recall</li>
-<li><strong>Turning evidence into a usable answer</strong> → LLM synthesis over retrieved context — human-readable output, grounded in cited evidence</li>
-</ul>
+<pre><code>+---------------------------------------------------+-------------------------------------------+---------------------------------------------------+
+| Need                                              | Preferred approach                        | Why                                               |
++===================================================+===========================================+===================================================+
+| Exact lookups, joins, schema-driven extraction    | Deterministic artefacts (structured JSON) | Precise, low-cost, auditable                      |
++---------------------------------------------------+-------------------------------------------+---------------------------------------------------+
+| Finding relevant evidence in unstructured sources | Retrieval substrate (BM25 + vectors)      | Best balance of exact and semantic recall         |
++---------------------------------------------------+-------------------------------------------+---------------------------------------------------+
+| Turning evidence into a usable answer             | LLM synthesis over retrieved context      | Human-readable output, grounded in cited evidence |
++---------------------------------------------------+-------------------------------------------+---------------------------------------------------+
+</code></pre>
 <p>Once you enforce that boundary, a lot of other engineering decisions become obvious.</p>
 <h2>What the Platform Does</h2>
 <p>Five components, each designed as an engineering surface you can reason about and operate.</p>
@@ -99,12 +111,18 @@ The same underlying knowledge exposed through a developer/assistant surface and 
 <h2>Where RAG Fails in Production (and What We Do Instead)</h2>
 <p>This is not a “better prompt” story. It is a “stop treating the model as the whole system” story.</p>
 <p>Here are four failure modes that show up quickly in real environments, and the platform discipline that prevents each one:</p>
-<ul>
-<li><strong>Silent coverage gaps</strong> — the system answers confidently, but the relevant evidence was never retrieved. Fix: treat coverage as a first-class concern (deep dive in Article 2).</li>
-<li><strong>Plausible boilerplate</strong> — the answer reads well but contains no real content. Fix: require outputs to pass an explicit quality bar (deep dive in Article 3).</li>
-<li><strong>Unbounded loops</strong> — “autonomy” becomes cost and latency runaway. Fix: enforce bounded execution: budgets, timeouts, and stop conditions.</li>
-<li><strong>One-off runs</strong> — the demo works once, then nobody can reproduce it. Fix: build like a data pipeline: repeatable runs and durable artefacts.</li>
-</ul>
+<pre><code>+-----------------------+-------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+| Failure mode          | What it looks like                                                            | Platform discipline that prevents it                                     |
++=======================+===============================================================================+==========================================================================+
+| Silent coverage gaps  | The system answers confidently, but the relevant evidence was never retrieved | Treat coverage as a first-class concern (deep dive in Article 2)         |
++-----------------------+-------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+| Plausible boilerplate | The answer reads well but contains no real content                            | Require outputs to pass an explicit quality bar (deep dive in Article 3) |
++-----------------------+-------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+| Unbounded loops       | “Autonomy” becomes cost and latency runaway                                   | Enforce bounded execution: budgets, timeouts, and stop conditions        |
++-----------------------+-------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+| One-off runs          | The demo works once, then nobody can reproduce it                             | Build like a data pipeline: repeatable runs and durable artefacts        |
++-----------------------+-------------------------------------------------------------------------------+--------------------------------------------------------------------------+
+</code></pre>
 <p>This article keeps those principles at the level of system design. If you want the deep dives, each component also has its own write-up.</p>
 <h2>What Makes This Production-Grade (Not Just “RAG”)</h2>
 <p>The difference is not the prompt. It is the discipline around the model:</p>
