@@ -8,15 +8,19 @@
 <p>Not dramatically different — subtly wrong. The second assistant built code that looked correct, compiled cleanly, and violated a constraint I thought was in place. The constraint was real. The documentation was accurate. The problem was simpler and more structural: the rule lived in a directory the second tool couldn't see.</p>
 <p>That is a harness problem. Not a model problem, not a documentation problem — a harness problem. And it took me longer than it should have to understand why, because I was still thinking of these tools as "AI coding assistants with different interfaces." They are not. They are harnesses. Understanding the distinction changes how you build with them.</p>
 <h2>Key takeaways</h2>
-<p>→ A coding agent harness is everything the model needs to do structured, repeatable work: context loading, tool access, orchestration, execution hooks, permission scoping, memory management, and session lifecycle.
-→ The model sets the ceiling on output quality. The harness sets the floor.
-→ Understanding the harness as an operating system changes how you configure it — and explains why configuration drift between tools produces failures that look like model inconsistency.</p>
+<ul>
+<li>A coding agent harness is everything the model needs to do structured, repeatable work: context loading, tool access, orchestration, execution hooks, permission scoping, memory management, and session lifecycle.</li>
+<li>The model sets the ceiling on output quality. The harness sets the floor.</li>
+<li>Understanding the harness as an operating system changes how you configure it — and explains why configuration drift between tools produces failures that look like model inconsistency.</li>
+</ul>
 <h2>Who this is for</h2>
 <p>Engineers using one or more AI coding assistants — Claude Code, Cursor, Trae, Copilot — who have noticed inconsistent results across sessions or tools and are unsure whether to blame the model, the prompting, or the setup.</p>
 <h2>What you'll learn</h2>
-<p>→ What a coding agent harness is, structurally, with Claude Code and Trae as concrete examples
-→ The seven components every harness provides and why each one matters
-→ Why the harness has more leverage over output quality than the model itself</p>
+<ul>
+<li>What a coding agent harness is, structurally, with Claude Code and Trae as concrete examples</li>
+<li>The seven components every harness provides and why each one matters</li>
+<li>Why the harness has more leverage over output quality than the model itself</li>
+</ul>
 <h2>The chat interface illusion</h2>
 <p>Most engineers, when they first use Claude Code or Cursor, treat them as capable chat interfaces: you describe a task, the AI produces code, you review and apply it. The tool is a delivery mechanism for the model's output.</p>
 <p>This model is partially accurate and entirely misleading.</p>
