@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Your AI Assistant’s Memory Isn’t Backed Up</h1>
+<p>Most conversations about AI coding assistants start with the same threat model: can you trust what the assistant produces?</p>
+<p>That matters. But if you use more than one assistant (Claude, Trae, Qwen), there is a quieter failure mode that will waste far more of your time: your rules don’t transfer.</p>
+<p>You correct one assistant for weeks. It learns how you work. Then you switch assistants (or tools) and everything regresses. Not because the new assistant is “worse”, but because you stored the rules in a place only the first assistant could ever see.</p>
+<p>This article gives you a simple mental model and a concrete fix: a three-layer memory architecture that makes multi-assistant work coherent, and makes your collaboration resilient to a new laptop, a re-install, or a tool switch.</p>
+<h2>The Problem Nobody Warns You About</h2>
+<p>If you use a single assistant, you can get away with a flawed setup for a long time. You teach the assistant your preferences and it appears to “remember”.</p>
+<p>As soon as you add a second assistant, the illusion breaks.</p>
+<p>The rules you thought were “project rules” were actually stored as tool-specific memory:</p>
+<ul>
+<li>Update documentation in the same session as the code change</li>
+<li>Don’t run long application tests from the assistant; provide commands for a human to run</li>
+<li>Read the project workflow before making changes</li>
+<li>Keep publication tracking in one canonical place, not scattered across files</li>
+</ul>
+<p>Those are not stylistic preferences. They are operating constraints that prevent drift.</p>
+<p>If only one assistant can see them, you’ve built a collaboration that depends on a single client’s local state. That is a brittle architecture.</p>
+<h2>The Mental Model: Three Layers of Memory</h2>
+<p>Most people talk about “AI memory” as one thing. In practice it is three layers with different properties:</p>
+<ul>
+<li><strong>Ephemeral</strong> — in-flight blockers, active run IDs, decisions still being evaluated. Ends with the session. Readable by one assistant only.</li>
+<li><strong>Assistant-local</strong> — tool-specific preferences saved by one vendor. Vendor/tool-local; retention varies by product; not repo-backed. Readable by one assistant only.</li>
+<li><strong>Governing artifacts</strong> — project rules, operating constraints, and workflow definitions stored in the repo. Git-backed. Readable by any assistant.</li>
+</ul>
+<p>The governing artifacts layer is the primary deliverable of AI-assisted workflows: structured human knowledge that cannot be regenerated without human effort — encoded constraints, decisions, and process definitions from which code is derived. Code is cheap to regenerate; these artifacts are not.</p>
+<p>The mistake is putting stable rules in assistant-local memory.</p>
+<p>Assistant-local memory feels “permanent” because it survives across sessions. But it is vendor/tool-local: no other assistant can read it. Retention varies by product — some vendors now cloud-sync this layer — but portability does not. And the backup policy is vendor-controlled, not yours: a product change or tier change can alter it without warning.</p>
+<p>If you are building a system that relies on stable rules, those rules need to live somewhere durable and universal: the repository.</p>
+<h2>A Second Dimension: What Kind of Knowledge?</h2>
+<p>The three-layer model tells you <em>where</em> memory lives and who can read it. A second dimension tells you <em>what kind of knowledge</em> you’re storing — and it lines up closely with how cognitive science breaks down long-term memory:</p>
+<ul>
+<li><strong>Working (short-term)</strong> — current task context. In a repo-based workflow: the few files you load for this task + whatever is actively in flight.</li>
+<li><strong>Semantic</strong> — timeless facts and principles. In a repo-based workflow: architecture notes, “why” decisions, standards and definitions.</li>
+<li><strong>Episodic</strong> — specific events tied to time and context. In a repo-based workflow: run artefacts, incident notes, decision logs, experiments and outcomes.</li>
+<li><strong>Procedural</strong> — “how-to” routines learned through practice. In a repo-based workflow: repeatable workflows, automation, checklists, guardrails.</li>
+</ul>
+<p>Seeing memory this way surfaces three practical design choices:</p>
+<ol>
+<li><strong>Lean loading beats full recall.</strong> Humans don’t pull every memory into working memory at once. Treat your project context the same way: load what the task needs, not everything “just in case”.</li>
+<li><strong>Episodic memory should be queryable.</strong> If an event matters later, store it as an artefact you can inspect and search, not as a vague recollection trapped in one tool.</li>
+<li><strong>Boundaries should be enforced, not assumed.</strong> The rule about where rules go needs to be part of the shared context itself, so every assistant learns the boundary before it accumulates new drift.</li>
+</ol>
+<h2>The Two Symptoms (And Why They’re the Same Root Cause)</h2>
+<h3>Symptom 1: “This assistant keeps doing it wrong”</h3>
+<p>You switch from one tool to another and immediately see regressions:</p>
+<ul>
+<li>The assistant runs a long command you never wanted it to run</li>
+<li>It edits code but doesn’t update the associated docs</li>
+<li>It “finishes” a task but leaves the backlog in an inconsistent state</li>
+</ul>
+<p>You correct it. Next time, you have to correct it again.</p>
+<p>Most people diagnose this as assistant quality differences.</p>
+<p>It usually isn’t.</p>
+<p>It is memory architecture: one assistant learned rules that never entered shared context.</p>
+<h3>Symptom 2: “I lost months of collaboration when I changed machines”</h3>
+<p>Even if you never change assistants, a machine change will force you to re-teach the same rules:</p>
+<ul>
+<li>Working style</li>
+<li>Definition of done</li>
+<li>What counts as publication-ready</li>
+<li>What to do and what not to do in this repo</li>
+</ul>
+<p>Your code is in git. Your operating rules should be too.</p>
+<h2>The Fix: A Shared “Working With This Human” Section</h2>
+<p>The fix is deliberately simple: create one shared, git-backed place for collaboration rules that any assistant can read before doing work.</p>
+<p>Call it whatever fits your repo. The important part is the boundary: stable rules belong in the repo, not inside one assistant.</p>
+<p>In this project, the shared context includes:</p>
+<ul>
+<li>Working style (what “done” means, how feedback is given, what to avoid)</li>
+<li>Behaviour rules (short, numbered, actionable)</li>
+<li>Current blockers that any new session must know</li>
+</ul>
+<p>Then enforce a simple rule of thumb:</p>
+<blockquote>
+<p>If a rule should change assistant behaviour across sessions or tools, it belongs in shared context.</p>
+</blockquote>
+<p>Everything else stays ephemeral.</p>
+<h2>Preventing the Fix from Becoming Another Drift Vector</h2>
+<p>If you move rules into a shared file, the next failure mode is predictable: the file grows without discipline.</p>
+<p>Within months, you can end up with a wall of “rules” that are really a list of edge cases. A new assistant can’t tell which constraints are load-bearing and which are historical noise. You’ve replaced “hidden memory” with “unreadable memory”.</p>
+<p>The solution is not complexity. It is selectivity:</p>
+<ol>
+<li>Does this change how we work on this project, or is it just what happened today?</li>
+<li>Is this already covered by an existing rule, just applied to a new case?</li>
+<li>Would I explain this to a new assistant starting tomorrow?</li>
+</ol>
+<p>If you can’t answer “yes” to at least one of these, don’t promote it to shared context.</p>
+<h2>Why This Matters</h2>
+<p>Multi-assistant workflows are becoming normal. Tooling will change. Models will change. Machines will be replaced.</p>
+<p>The only durable surface you control is the repository.</p>
+<p>If you treat shared context as part of your system design — not as an afterthought — you get three benefits immediately:</p>
+<ul>
+<li>Switching assistants stops being a reset</li>
+<li>New sessions start coherent without relying on chat history</li>
+<li>Your collaboration survives a new machine as cleanly as your code does</li>
+</ul>
+<p>That is what this article is really about: not “better prompting”, but better architecture for collaboration.</p>
+
+</body>
+</html>

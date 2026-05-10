@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The Engineer Who Stopped Coding</h1>
+<p>The loud story about AI is that it will replace engineers.</p>
+<p>The quieter story is that it changes where engineering value lives.</p>
+<p>Code-writing was never the scarce thing. Judgment was.</p>
+<p>What AI changes is not the need for judgement, but the medium through which it can be expressed. The most interesting shift is not “AI writes code faster”. It is that experienced judgement can be encoded into a durable system that an assistant executes repeatedly, across sessions, without the human being present for every step.</p>
+<p>This article is about that shift: from coding as the primary output to encoding as the primary output.</p>
+<h2>The Wrong Mental Model: AI as a Fast Typist</h2>
+<p>Most people think AI-assisted development looks like this:</p>
+<ol>
+<li>The human decides what to build.</li>
+<li>The AI writes the code.</li>
+<li>The human reviews the diff.</li>
+<li>Repeat.</li>
+</ol>
+<p>This is the “fast typist” model. It can be useful. It also has a ceiling: the human remains the quality gate on every output.</p>
+<p>Speed improves, but the scarce resource — experienced judgement and attention — is still consumed at the same rate.</p>
+<p>If this is the only way you use AI, it is understandable that you feel threatened. In that model, the AI competes with the part of your job that was never the real differentiator.</p>
+<h2>The Alternative: Encode Judgement Upstream</h2>
+<p>The more scalable model is different:</p>
+<ul>
+<li>The human encodes judgement into durable constraints: principles, boundaries, definitions of done, and failure signals.</li>
+<li>The assistant reads those constraints and executes.</li>
+<li>The system enforces the constraints automatically, so the human is not required to police them in every session.</li>
+</ul>
+<p>This is not “no human involvement”. It is a deliberate repositioning of the human:</p>
+<p><strong>above the loop.</strong></p>
+<p>Instead of supervising every output, the human designs the system that makes outputs verifiable.</p>
+<h2>What “Encoding” Looks Like in Practice</h2>
+<p>Encoding is not writing a long document.</p>
+<p>It is creating a small set of durable control surfaces that survive:</p>
+<ul>
+<li>a new session</li>
+<li>a different assistant</li>
+<li>a new machine</li>
+<li>a future refactor</li>
+</ul>
+<p>In practice, encoding has three parts.</p>
+<h3>1) Principles that change behaviour everywhere</h3>
+<p>A single principle, written clearly and treated as non-negotiable, can change how an assistant behaves across an entire codebase.</p>
+<p>For example:</p>
+<ul>
+<li>“Prefer proven open-source primitives over custom infrastructure.”</li>
+<li>“Keep work resumable: idempotent runs and durable artefacts.”</li>
+<li>“Treat docs as an execution surface, not a retrospective.”</li>
+</ul>
+<p>The point is not the words. The point is the effect: a principle becomes an instruction set the assistant applies repeatedly, without the human restating it.</p>
+<h3>2) Contracts that define what “done” means</h3>
+<p>If you want autonomy, you cannot rely on “I think it’s done”.</p>
+<p>You need contracts that define:</p>
+<ul>
+<li>what the module exists to do</li>
+<li>what outputs and interfaces are expected</li>
+<li>what constraints must always hold</li>
+<li>what evidence proves correctness</li>
+</ul>
+<p>When those contracts are durable, any assistant can pick up a task from a cold start and converge on the same result.</p>
+<h3>3) Gates that turn preferences into constraints</h3>
+<p>This is where most teams stop too early.</p>
+<p>An instruction in a document is a preference. It can be acknowledged and then quietly violated under task pressure.</p>
+<p>A gate is a constraint. It produces an unambiguous failure signal.</p>
+<p>When constraints are executable, the assistant does not need to “remember” what matters. The system enforces it.</p>
+<p>That is the core automation: move important judgement out of chat and into the build.</p>
+<h2>Why Experience Becomes More Valuable, Not Less</h2>
+<p>This is the part that people miss when they treat AI as a replacement story.</p>
+<p>A junior engineer can ask an assistant to write code.</p>
+<p>A senior engineer can recognise:</p>
+<ul>
+<li>which failures are structural, not accidental</li>
+<li>which constraints must be non-negotiable</li>
+<li>which decisions should be encoded as principles</li>
+<li>which rules need a failure signal to survive time and task pressure</li>
+</ul>
+<p>That recognition is what gets encoded.</p>
+<p>In other words: experience becomes legible to the system.</p>
+<p>AI does not remove the need for judgement. It makes judgement the dominant lever.</p>
+<h2>The Shift in Role</h2>
+<p>The old role:</p>
+<ul>
+<li>write most of the code</li>
+<li>review most of the changes</li>
+<li>carry continuity in your head</li>
+</ul>
+<p>The new role:</p>
+<ul>
+<li>decide what matters</li>
+<li>encode constraints upstream</li>
+<li>build gates that enforce them</li>
+<li>review outcomes rather than every intermediate step</li>
+</ul>
+<p>This is not a retreat from engineering. It is engineering expressed at a different layer: systems design, governance, and durability.</p>
+<h2>The Point</h2>
+<p>AI makes code cheaper.</p>
+<p>It does not make judgement cheaper.</p>
+<p>The highest-leverage work is to encode judgement into a form that survives: principles, contracts, and gates. Once you do that, AI stops being a risky productivity hack and becomes an execution engine.</p>
+<p>That is not the end of engineering.</p>
+<p>It is the evolution of it.</p>
+
+</body>
+</html>

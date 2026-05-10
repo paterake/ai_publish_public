@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Your AI Should Behave Like a Librarian, Not a Researcher</h1>
+<p>Most “agent” narratives frame the model as a researcher: it decides what to do, where to look, and when to stop.</p>
+<p>That framing feels powerful. It also hides the governance problem.</p>
+<p>If the model is the researcher, the model becomes the decision-maker. And decision-making is the thing you most need to constrain.</p>
+<p>There is a better mental model for most production AI systems:</p>
+<p>Your AI should behave like a librarian.</p>
+<p>This article explains what that means, why it changes your architecture choices, and why it is the difference between a demo and a system you can trust.</p>
+<h2>The Library Analogy</h2>
+<p>Imagine someone walks into a library with a question.</p>
+<p>They do not need the librarian to invent new knowledge. They need help finding the right sources.</p>
+<p>In the analogy:</p>
+<ul>
+<li><strong>The person asking</strong> is the model: it wants information to answer a question.</li>
+<li><strong>The librarian</strong> is the orchestration layer: it knows what sources exist and how to retrieve from them.</li>
+<li><strong>The catalogue cards</strong> are tool definitions: structured descriptions of what each source contains and how to access it.</li>
+<li><strong>The books and databases</strong> are the stores: documents, catalogues, structured datasets, relationship graphs.</li>
+<li><strong>The content producers</strong> are the pipelines that create and maintain those stores.</li>
+</ul>
+<p>The non-obvious principle the analogy reveals is responsibility:</p>
+<p>The content producers decide what exists.</p>
+<p>The librarian decides what is findable.</p>
+<p>Those responsibilities should not be merged.</p>
+<h2>Why “Researcher” Is the Wrong Default</h2>
+<p>A researcher is expected to decide:</p>
+<ul>
+<li>what sources to consult</li>
+<li>what strategy to use when the first attempt fails</li>
+<li>how long to keep trying</li>
+<li>what constitutes “enough evidence”</li>
+</ul>
+<p>If your model is the researcher, you have implicitly granted it autonomy over:</p>
+<ul>
+<li>cost and latency (how long it tries)</li>
+<li>correctness posture (what it accepts as “enough”)</li>
+<li>auditability (why it chose a source)</li>
+</ul>
+<p>That is not “more capable”. It is less governable.</p>
+<p>The core problem is not whether the model can do those things. It is whether you can constrain and audit them.</p>
+<h2>The Librarian Posture: Bounded Autonomy</h2>
+<p>The librarian posture flips the control surface:</p>
+<ul>
+<li>The system defines the sources and the retrieval interfaces.</li>
+<li>The system defines which tools exist and what they are allowed to return.</li>
+<li>The system defines the cost/latency envelope and the stopping rules.</li>
+</ul>
+<p>The model can still be useful inside this system:</p>
+<ul>
+<li>it can interpret the question and choose an appropriate retrieval route</li>
+<li>it can summarise retrieved material</li>
+<li>it can explain trade-offs in human terms</li>
+</ul>
+<p>But it does not own the substrate.</p>
+<p>The architecture owns the substrate.</p>
+<h2>The Practical Benefits (Why This Is Not Just Philosophy)</h2>
+<h3>1) Auditability</h3>
+<p>If tools are defined as catalogue cards, you can inspect what the system could have done.</p>
+<p>You can answer questions like:</p>
+<ul>
+<li>what sources were available for this query</li>
+<li>which one was used and why</li>
+<li>what evidence was retrieved</li>
+</ul>
+<p>This is much harder when “the agent decided to browse and then write an answer”.</p>
+<h3>2) Predictable cost and latency</h3>
+<p>Libraries have opening hours. They have rules. You can set expectations.</p>
+<p>A bounded system can provide predictable envelopes:</p>
+<ul>
+<li>you can cap time</li>
+<li>you can cap tool calls</li>
+<li>you can cap expensive operations</li>
+</ul>
+<p>Unbounded research behaviour is the opposite: cost and latency become emergent properties of the prompt.</p>
+<h3>3) Repeatability</h3>
+<p>A librarian can answer the same request tomorrow the same way because the catalogue is stable.</p>
+<p>If your system behaviour depends on a model improvising a research strategy, you will get variability across runs, sessions, and models.</p>
+<p>Repeatability is not a luxury. It is how systems become operable.</p>
+<h2>The Point</h2>
+<p>If you want autonomy in production, you do not want the model to be a researcher.</p>
+<p>You want it to be a librarian operating inside a well-designed library:</p>
+<ul>
+<li>sources are explicit</li>
+<li>access is structured</li>
+<li>behaviour is bounded</li>
+<li>decisions are auditable</li>
+</ul>
+<p>That is what makes an AI system governable.</p>
+<p>Not better prompts.</p>
+<p>Better orchestration.</p>
+
+</body>
+</html>

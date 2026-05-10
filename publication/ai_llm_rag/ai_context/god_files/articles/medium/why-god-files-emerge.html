@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Why “God Files” Keep Emerging (Even When the Rules Are Clear)</h1>
+<p>If you’ve ever tried to keep a codebase clean while using AI coding assistants, you’ve probably seen this pattern:</p>
+<p>You give clear guidance.</p>
+<p>You state the architectural rule.</p>
+<p>And a few sessions later, you still end up with a single file that contains everything: config parsing, orchestration, telemetry, error handling, formatting, and half a dozen unrelated helpers.</p>
+<p>The file grows because each change is small and locally reasonable. The accumulation is what creates the mess.</p>
+<p>This article is not about blaming the assistant. It’s about understanding the mechanism and designing a control that actually holds.</p>
+<h2>What a “God File” Really Is</h2>
+<p>A god file is not “a large file”.</p>
+<p>It is a file with many unrelated reasons to change.</p>
+<p>Size correlates with the problem, but the actual failure is cohesion: the file becomes the default place to put anything “nearby”, and unrelated concerns accrete until the module is hard to reason about and harder to refactor.</p>
+<h2>The Setup: Clear Rules, Clear Intent</h2>
+<p>Most teams start with a reasonable rule:</p>
+<blockquote>
+<p>One responsibility per file.</p>
+</blockquote>
+<p>They might add a pattern:</p>
+<ul>
+<li>keep a stable façade as the public import surface</li>
+<li>move cohesive responsibilities into internal modules</li>
+</ul>
+<p>On paper, this should prevent god files.</p>
+<p>And yet they still appear.</p>
+<h2>The Mechanism: Three Interlocking Causes</h2>
+<h3>1) The nearest-open-file bias</h3>
+<p>When an assistant is asked to add a feature, it will usually modify the file that already contains related logic.</p>
+<p>This is not stubbornness. It is the path of least resistance:</p>
+<ul>
+<li>the file is already open</li>
+<li>the surrounding code is already in context</li>
+<li>extending it satisfies the immediate ask</li>
+</ul>
+<p>Creating a new file is a meta-decision about structure. Under task pressure, “extend the nearest file” is the default.</p>
+<h3>2) Task pressure wins the attention budget</h3>
+<p>Early in a session, architectural constraints carry weight because the assistant has just loaded them.</p>
+<p>As the session fills with implementation detail, the relative weight of those constraints decreases. They are not ignored; they are outcompeted by the immediate signals of completing the task.</p>
+<p>Even disciplined assistants tend to violate structural rules incrementally because no single step looks like a clear breach.</p>
+<h3>3) Prose rules have no failure signal</h3>
+<p>This is the root cause.</p>
+<p>When a structural rule is violated, nothing fails.</p>
+<p>There is no red build.</p>
+<p>No test breaks.</p>
+<p>No gate fires.</p>
+<p>Without an unambiguous failure signal, the rule is advisory. Advisory rules erode under pressure.</p>
+<h2>The Distinction That Matters: Preferences vs Constraints</h2>
+<p>An instruction written in a context document is a preference: a shape the assistant tries to satisfy when it can.</p>
+<p>A gate is a constraint: a condition that stops the work when violated.</p>
+<p>The key difference is that constraints do not live in the assistant’s context window. They live in the build. They cannot be “deprioritised” by task pressure.</p>
+<p>If you want a structural rule to hold, encode it as a constraint.</p>
+<h2>The Only Fix That Scales: Make the Structure Falsifiable</h2>
+<p>To prevent god files, you need a mechanism that makes the accretion visible and forces a decision.</p>
+<p>There are many ways to do that. The shared pattern is:</p>
+<ol>
+<li>Define the structural invariant (what must not happen)</li>
+<li>Define a measurable proxy (how you detect it)</li>
+<li>Fail fast when it drifts</li>
+</ol>
+<p>The moment the rule has a failure signal, refactoring becomes the easier path:</p>
+<ul>
+<li>either split the responsibility</li>
+<li>or explicitly justify why the file is allowed to grow</li>
+</ul>
+<p>Both outcomes are better than silent accretion.</p>
+<h2>The Payoff</h2>
+<p>Once you have a structural gate in place, two things happen:</p>
+<ol>
+<li>Assistants stop “accidentally” creating god files, because they can’t.</li>
+<li>Humans stop policing structure by memory and taste, because the system makes the decision point explicit.</li>
+</ol>
+<p>This is the broader lesson for AI-assisted development:</p>
+<p>If a rule matters, don’t write it as prose and hope.</p>
+<p>Give it a failure signal and let the system enforce it.</p>
+
+</body>
+</html>

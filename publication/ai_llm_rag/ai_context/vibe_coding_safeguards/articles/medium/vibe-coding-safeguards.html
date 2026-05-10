@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Vibe Coding Safeguards: How to Trust AI Assistants Without Slowing Down</h1>
+<p>The problem with AI coding assistants is not that they write “bad code”.</p>
+<p>The real risk is drift: the code changes, the docs lag behind, and the shared context that guides future work becomes subtly wrong. Nothing breaks immediately. The system still runs. But over weeks, assistants start working from an inaccurate model of reality and confident mistakes compound.</p>
+<p>If you have felt the pattern — “it said it was done, but it wasn’t quite done” — you have seen drift.</p>
+<p>This article is about the controls that make AI-assisted development safe enough to run at full delegation. Not “prompting harder”. A control system: durable contracts, hard workflow triggers, and machine-enforced gates.</p>
+<h2>The Failure Mode: Confident Incompleteness</h2>
+<p>In practice drift looks like small, plausible misses:</p>
+<ul>
+<li>An assistant refactors code but doesn’t update the docs that explain how to run it.</li>
+<li>A “maturity” or status summary stays stale after a change, so the next session solves the wrong problem.</li>
+<li>A guardrail is described in prose but never implemented as an actual check.</li>
+<li>Two documents track the same thing and disagree.</li>
+</ul>
+<p>None of these are exotic model failures. They are what happens when the system of record is a chat session and “done” is self-declared.</p>
+<p>The fix starts by treating drift as an engineering problem, not a behaviour problem.</p>
+<h2>The Model: Three Layers That Can Drift Independently</h2>
+<p>AI-assisted development creates three different “truth surfaces”, each with its own drift risk:</p>
+<ol>
+<li><strong>Implementation truth</strong>: what the code actually does</li>
+<li><strong>Operational truth</strong>: what a real run produced (outputs, metrics, error envelopes)</li>
+<li><strong>Guidance truth</strong>: what future assistants will read and trust (docs, PRDs, shared context)</li>
+</ol>
+<p>Most teams only guard the first layer (code review, tests). With assistants, the third layer becomes equally important: if guidance truth drifts, the assistant will confidently reintroduce mistakes that were already fixed.</p>
+<h2>Control 1: Treat Docs as a First-Class Deliverable</h2>
+<p>The simplest drift vector is code/doc divergence.</p>
+<p>The control is not “please update the docs”. The control is a hard trigger:</p>
+<ul>
+<li>If you change behaviour, you must update the documentation that describes that behaviour in the same change.</li>
+<li>If you add a new file that matters to understanding the system, you must register it in the system map in the same change.</li>
+</ul>
+<p>This is less about documentation quality and more about keeping the assistant’s future inputs correct.</p>
+<p>The moment you accept “we’ll update docs later”, you have created an accuracy gap that future sessions cannot see.</p>
+<h2>Control 2: PRDs Capture Intent, Not Implementation</h2>
+<p>Assistants are powerful at filling in details. That is a strength and a risk.</p>
+<p>If your PRDs describe <em>how</em> a thing is built, they rot as soon as you refactor. A future assistant reads the PRD, believes it, and reintroduces outdated architecture in good faith.</p>
+<p>A more stable contract is:</p>
+<ul>
+<li>Why the module exists</li>
+<li>What constraints must always hold</li>
+<li>What “done” looks like (outputs, interfaces, acceptance criteria)</li>
+<li>What evidence makes a claim publishable</li>
+</ul>
+<p>This keeps the spec durable while allowing the implementation to evolve.</p>
+<h2>Control 3: Prefer Constraints Over Instructions</h2>
+<p>This is the core distinction.</p>
+<p>An instruction in a document is a preference. It can be acknowledged and then displaced by task pressure.</p>
+<p>A gate is a constraint. It cannot be “forgotten” because it lives outside the assistant’s context window: in the test suite and the build.</p>
+<p>If a rule matters, give it a failure signal.</p>
+<p>Examples of structural rules that should be enforceable:</p>
+<ul>
+<li>“Do not let a single file accrete multiple unrelated responsibilities”</li>
+<li>“Do not import internal modules directly; use stable façades”</li>
+<li>“Do not leak domain-specific terms into shared, reusable libraries”</li>
+<li>“Do not let the project’s ‘summary truth’ drift from the actual checks”</li>
+</ul>
+<p>You do not need a large framework to do this. You need one or two small checks that fail fast.</p>
+<h2>Control 4: Make “Summary Truth” Testable</h2>
+<p>Most projects keep some “summary truth” document:</p>
+<ul>
+<li>a maturity table</li>
+<li>a status tracker</li>
+<li>a backlog index</li>
+<li>a “what’s safe to use” list</li>
+</ul>
+<p>These are useful precisely because they are summaries. They are also where drift hides: summaries are easy to forget to update.</p>
+<p>The control is a simple pattern:</p>
+<ol>
+<li>Identify the summary statement a future assistant will trust</li>
+<li>Identify the ground truth signal in the repo that proves it</li>
+<li>Fail the build if they disagree</li>
+</ol>
+<p>Once you do this, the summary stops being an aspirational document and becomes a reliable control surface.</p>
+<h2>Control 5: Use Operational Artefacts as Evidence</h2>
+<p>When assistants report “it works”, they are often reporting intent, not observation.</p>
+<p>Operational artefacts tighten the loop:</p>
+<ul>
+<li>you can review what actually happened, not what was intended</li>
+<li>regressions become visible as diffs between runs</li>
+<li>tuning becomes evidence-led rather than opinion-led</li>
+</ul>
+<p>The goal is not to turn every change into a benchmarking exercise. The goal is to make critical claims falsifiable.</p>
+<h2>Control 6: Keep Memory Where It Belongs</h2>
+<p>Drift does not only happen in code and docs. It happens in assistant behaviour rules too.</p>
+<p>If stable rules live in one assistant’s local memory, you have created a second source of truth that:</p>
+<ul>
+<li>does not transfer to other assistants</li>
+<li>does not survive a new machine</li>
+<li>cannot be reviewed in code review</li>
+</ul>
+<p>Stable “how we work” rules belong in a git-backed shared context that every assistant can read before doing work. Local memory is for in-flight state only.</p>
+<h2>The Payoff: Full Delegation Without Gambling</h2>
+<p>The point of these controls is not to slow the assistant down. It is to make delegation rational.</p>
+<p>Once the system is designed so that:</p>
+<ul>
+<li>intent is durable</li>
+<li>constraints are executable</li>
+<li>evidence is reviewable</li>
+<li>summaries cannot silently drift</li>
+</ul>
+<p>…you stop treating every assistant output as a one-off that must be manually policed. You treat it as work produced under a contract.</p>
+<p>That is the difference between “vibe coding” as a risky novelty and AI-assisted development as an engineering system.</p>
+<h2>What to Implement First (If You’re Starting From Scratch)</h2>
+<p>If you only implement three things, implement these:</p>
+<ol>
+<li>A hard workflow rule: “docs and behaviour change together”</li>
+<li>A single source of truth for standards and operating constraints</li>
+<li>One small drift gate that proves your summary truth stays aligned to reality</li>
+</ol>
+<p>Then expand from there, one real failure mode at a time.</p>
+<p>Controls that were never exercised are theatre. Controls that were born from a real drift incident are the ones you keep.</p>
+
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The Harness Is a Commodity</h1>
+<p>The community just figured out that the model isn’t the differentiator — the harness is.</p>
+<p>Claude Code launches, and a clone appears within days.</p>
+<p>That’s the moment the next conclusion becomes obvious:
+the harness is a commodity too.</p>
+<p>If a harness can be cloned quickly, the compounding investment isn’t “which tool”.
+It’s the governance layer: the project-specific, git-backed rules, process discipline, and contracts that tell any harness how to behave.</p>
+<p>This is not a thought experiment. I run the same governance layer across three different coding assistants today. When I swap tools, the behaviour transfers because it is anchored in the repo, not in any one assistant’s memory.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>The model sets the ceiling, the harness makes it usable, and the governance layer sets the floor.</li>
+<li>Harnesses proliferate quickly; optimising the harness is like optimising the IDE plugin. Useful, but not where advantage compounds.</li>
+<li>Governance is not “more prompting”. It’s a designed control surface: durable contracts, hard workflow triggers, and executable gates.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>If you have ever debated Claude Code vs claw-code vs Cursor vs Cline (or the next thing), this is for you.</p>
+<p>Also: engineering leads deciding whether “AI tooling” is a procurement decision or an engineering capability you build.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>Why “the harness is the differentiator” is correct, and still one layer short</li>
+<li>What the governance layer actually contains (and what it must not become)</li>
+<li>A simple test for whether your current setup will survive a tool swap</li>
+</ul>
+<h2>The community’s half-insight</h2>
+<p>For a long time, the default debate was “which model?”:</p>
+<ul>
+<li>GPT-4 vs Claude vs Gemini</li>
+<li>bigger context windows</li>
+<li>“this one feels smarter”</li>
+</ul>
+<p>Then the community had an uncomfortable experience: a better model didn’t fix brittle workflows.</p>
+<p>Claude Code’s release surfaced the next layer:</p>
+<blockquote>
+<p>The model isn’t the differentiator. The harness is.</p>
+</blockquote>
+<p>That is real progress. The harness matters because it is where the work becomes executable:
+what context gets loaded, how tasks are scoped, what tools are available, how you apply safety boundaries, how you enforce a completion protocol.</p>
+<p>But it is still not the durable advantage.</p>
+<p>Because a harness can be copied.</p>
+<p>If a clone can appear in days, “pick the best harness” becomes the same kind of mistake as “pick the best model”.
+You are optimising a layer that is moving too quickly, and whose improvements will be commoditised.</p>
+<h2>Why harnesses commoditise</h2>
+<p>Harnesses commoditise for the same reason that IDE extensions commoditise:</p>
+<ul>
+<li>features are legible (everyone can see what works)</li>
+<li>the primitives are shared (tool calling, file edits, diffs, code search, tests)</li>
+<li>the incentive is strong (a better harness turns a model into a product)</li>
+</ul>
+<p>So the cycle becomes predictable:</p>
+<ol>
+<li>A good harness ships.</li>
+<li>The community copies the behaviour patterns.</li>
+<li>The feature set converges.</li>
+<li>The debate restarts at the next thin layer of differentiation.</li>
+</ol>
+<p>This is not an argument against harnesses. You need one.</p>
+<p>It is an argument about where to invest.</p>
+<h2>The full insight: the governance layer</h2>
+<p>The durable advantage is the layer that the harness executes but cannot cheaply invent:</p>
+<p>the governance layer.</p>
+<p>The governance layer is the project’s “how we work” encoded in a form that survives:</p>
+<ul>
+<li>different sessions</li>
+<li>different assistants</li>
+<li>different machines</li>
+<li>different harnesses</li>
+</ul>
+<p>It is not a single file of tips.
+It is an artifact layer: structured human knowledge — governance rules, contracts, process definitions — encoded in a form that any harness can load and execute against. These are the primary artifacts of AI-assisted development; the code the harness produces is derived from them.</p>
+<p>In practical terms, governance is what makes the same assistant behave consistently across a six-month codebase evolution, not just within a single chat.</p>
+<p>If you swap the harness and your behaviour changes, you did not have governance.
+You had familiarity.</p>
+<h2>What governance contains (in practice)</h2>
+<p>If you want this to be real, governance needs three control surfaces.</p>
+<h3>1) Durable contracts</h3>
+<p>Every meaningful unit of work needs an entry point that states:</p>
+<ul>
+<li>what is in scope</li>
+<li>what must not change (invariants)</li>
+<li>how “done” is verified</li>
+</ul>
+<p>This is the difference between “help me refactor this” and “refactor this module without changing the public interface; prove it by running X”.</p>
+<p>Without contracts, the assistant is forced to infer intent from your chat style and recent context.
+That works until it doesn’t.</p>
+<h3>2) Hard workflow triggers</h3>
+<p>Some actions must be non-optional.</p>
+<p>If a certain type of change requires updating a boundary artifact, regenerating an index, or rerunning a validator, encode that as a trigger.</p>
+<p>The test is simple:
+if you have ever written “don’t forget to…” in a prompt, that is a workflow trigger you are currently holding in your head.</p>
+<p>Humans forget. Assistants forget. Triggers don’t.</p>
+<h3>3) Executable gates</h3>
+<p>This is where governance becomes enforceable.</p>
+<p>A rule without a failure signal is advisory.
+Advisory rules erode under task pressure.</p>
+<p>The same logic applies to the governance text itself. A rule that states only the command — "do not X" — gives an agent no basis for judging whether the situation is an exception. When urgency arrives or a case feels edge-like, the rule provides nothing to reason against. A rule that states the consequence — "do not X; if you do, Y breaks" — holds under pressure because the agent can ask: does this situation actually trigger Y? Where a machine gate is impractical, a stated consequence is the next best mechanism for keeping a rule from being quietly overridden.</p>
+<p>Gates are the mechanism that keeps behaviour stable when:</p>
+<ul>
+<li>the session is long</li>
+<li>the assistant changes</li>
+<li>a human is not reviewing every step</li>
+</ul>
+<p>One concrete example: if a change crosses an interface boundary, the build fails unless the boundary contract is updated.</p>
+<p>No memory required. No “please remember”. Just a system that refuses to accept a change that violated the contract.</p>
+<h2>What governance is not</h2>
+<p>It is not “a better prompt”.</p>
+<p>Prompts are session-scoped. They are useful. They are also ephemeral.</p>
+<p>It is not a bigger CLAUDE.md full of preferences.</p>
+<p>Preferences are not governance. Preferences don’t survive contact with urgency.</p>
+<p>Governance is a designed system that makes the correct behaviour the default and makes incorrect behaviour noisy.</p>
+<p>If your assistant behaves well only when you are watching closely, you do not have governance.
+You have supervision.</p>
+<h2>Ceiling vs floor: why governance beats model upgrades</h2>
+<p>Model quality sets the ceiling: how good the best answer can be.</p>
+<p>Governance quality sets the floor: how reliably you get acceptable behaviour under real conditions.</p>
+<p>Most teams try to raise the ceiling first.</p>
+<p>But if the floor is low, raising the ceiling doesn’t help. You still get:</p>
+<ul>
+<li>“helpful” changes that violate invariants</li>
+<li>inconsistent refactors across sessions</li>
+<li>decisions that disappear when chat history disappears</li>
+<li>costs and latency that balloon under “research” behaviour</li>
+</ul>
+<p>A governed weaker model can outperform an ungoverned stronger model on structured work because it is operating inside a system that constrains failure modes.</p>
+<p>The harness makes the model usable.
+The governance layer makes it dependable.</p>
+<h2>The simple test</h2>
+<p>If you remember nothing else, use this:</p>
+<blockquote>
+<p>If you switched your primary AI coding assistant tomorrow — different tool, same project — how much of your setup transfers?</p>
+</blockquote>
+<p>If the answer is “little or nothing”, your investment is trapped in the harness layer:
+the tool, the UI, the muscle memory, the prompts that only one assistant sees.</p>
+<p>If the answer is “nearly everything”, your investment is in governance:
+the repo-backed contracts, triggers, and gates that any harness can execute.</p>
+<p>That is where advantage compounds.</p>
+<h2>Closing: stop optimising the tool</h2>
+<p>Harnesses matter. Choose one you can live with.</p>
+<p>Then stop optimising the tool.</p>
+<p>The tool is a commodity.</p>
+<p>Invest in the governance layer: the project-specific, harness-agnostic content that makes any tool effective.</p>
+<p>That is how you build AI capability that survives the next release cycle.</p>
+
+</body>
+</html>
