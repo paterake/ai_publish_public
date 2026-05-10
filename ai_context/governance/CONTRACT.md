@@ -17,14 +17,10 @@ All normative rules for this repo live under `ai_context/`:
 Content state lives under:
 - `publication/<project>/...`
 
-## 2) Skills are orchestration only (no duplication)
+## 2) No repo-local sync tooling
 
-`ai_context/ai_harness/skills/*` are procedural wrappers:
-- what to read
-- what files to create/update
-- what order to run steps in
-
-Skills must reference the canonical documents above and must not restate rules. This prevents drift depending on whether an assistant uses a skill or works directly from `ai_context`.
+This repo does not contain sync scripts or sync skills. The export is executed from the private `ai_publish` repo and
+committed/pushed into this repo.
 
 ## 3) Mirror-only repository
 
@@ -32,13 +28,13 @@ This repo must not be used for authoring.
 
 - Do not draft or edit publication markdown here.
 - Do not add PRDs, TODO trackers, strategy docs, or internal workflow state.
-- Content is synced from `../ai_publish/publication/` and may be overwritten on re-sync.
+- Content is exported from `../ai_publish/publication/` and may be overwritten on re-export.
 
 ## 4) Allowed content boundary
 
 Only these should appear under `publication/`:
 - `**/articles/**/*.md`
-- `**/assets/**` (only assets required for publication)
+- `**/assets/**` (image assets required for publication; no `*.md`)
 
 Do not copy any other directories or files.
 
@@ -50,7 +46,7 @@ Do not copy any other directories or files.
 
 ## 6) Reporting discipline
 
-When performing a sync, report:
+When performing an export, report:
 - the scope requested (project/area/pack)
 - the targets copied
 - any missing/empty sources (not an error; just note)
@@ -58,4 +54,4 @@ When performing a sync, report:
 
 ## 7) Standards propagation (hard)
 
-If any canonical standards in `ai_context/` are changed, audit and update any dependent skills/pointers in the same pass.
+If any canonical standards in `ai_context/` are changed, update this repo’s process docs in the same pass.

@@ -2,16 +2,13 @@
 
 This workflow applies when updating this repo from `../ai_publish/publication/`.
 
+Exports are executed from the private `ai_publish` repo and committed/pushed into this repo.
+
 ## Inputs (from the user)
 
-Supported commands:
-- `sync articles for <project>`
-- `sync articles for <project> implementation`
-- `sync articles for <project> ai_context` (also accept `ai-context`)
-- `sync articles for <project> implementation <pack>`
-- `sync articles for <project> ai_context <pack>` (also accept `ai-context`)
-- `pull next publishable for <project> <area>`
-- `resync next publishable for <project> <area>`
+Supported requests:
+- “export the next publishable pack”
+- “export `<project>` `<area>` `<pack>`”
 
 ## Scope rules
 
@@ -26,7 +23,7 @@ Supported commands:
 
 Copy only:
 - `articles/` (recursive)
-- `assets/` (recursive, if present at source)
+- image assets under `assets/` (recursive, if present at source; exclude `*.md`)
 
 Do not copy:
 - `docs/`
@@ -38,36 +35,13 @@ Do not copy:
 
 1) Determine the scope from the user command.
 
-2) Enumerate targets from `../ai_publish/publication/<project>/`:
-- Full project: all packs under `implementation/` and `ai_context/`.
-- Area only: all packs under that area.
-- One pack: just that pack under the selected area.
-
-3) For each target, ensure destination directories exist:
+2) Run the deterministic export script from the `ai_publish` repo root:
 
 ```bash
-mkdir -p publication/<project>/<area>/<pack>/articles
+uv run python scripts/sync_public_mirror.py next --project <project> --area any
 ```
 
-4) Copy `articles/` with rsync:
-
-```bash
-rsync -av \
-  ../ai_publish/publication/<project>/<area>/<pack>/articles/ \
-  publication/<project>/<area>/<pack>/articles/
-```
-
-5) If `assets/` exists for the pack, copy it too:
-
-```bash
-if [ -d "../ai_publish/publication/<project>/<area>/<pack>/assets" ]; then
-  rsync -av \
-    ../ai_publish/publication/<project>/<area>/<pack>/assets/ \
-    publication/<project>/<area>/<pack>/assets/
-fi
-```
-
-6) Report (see `ai_context/governance/CONTRACT.md`).
+3) Report (see `ai_context/governance/CONTRACT.md`).
 
 ## Constraints
 
@@ -76,21 +50,5 @@ Enforce the contract:
 
 ## Next publishable (READY pack only)
 
-When the user asks for “next publishable”, sync only one pack selected from:
-- `../ai_publish/publication/<project>/implementation/<pack>/`
-- `../ai_publish/publication/<project>/ai_context/<pack>/`
-
-Selection:
-1) Read `../ai_publish/publication/<project>/docs/PUBLICATION_PATH.md`.
-2) Choose the first entry with `Status: READY` matching the requested `<area>`:
-   - `implementation` → pack starts with `implementation/`
-   - `ai_context` or `ai-context` → pack starts with `ai_context/`
-   - `any` → either prefix
-
-Copy rules (for the chosen pack only):
-- Copy `articles/linkedin/**/*.md`
-- Copy `articles/medium/**/*.md`
-- Copy image assets under `assets/` (exclude `*.md`, including cover briefs)
-
-Do not copy:
-- `PRD.md`, `TODO_PUBLICATION.md`, `docs/`, or any other files outside the paths above
+When the user asks for “next publishable”, export only one pack selected from the requested `<area>` based on
+`publication/<project>/docs/PUBLICATION_PATH.md` in the private `ai_publish` repo.

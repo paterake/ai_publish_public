@@ -19,7 +19,8 @@ This repo is intentionally thin. It should not accumulate process state.
 All publication content originates in:
 - `../ai_publish/publication/`
 
-Do not edit publication content directly in this repo. Any direct edits will be overwritten on the next sync.
+Do not edit publication content directly in this repo. Any direct edits will be overwritten on the next export from
+`ai_publish`.
 
 ## What belongs here (and where)
 
@@ -54,20 +55,13 @@ This repo’s rules live in:
 - `ai_context/process/TOOL_WORKFLOW.md`
 - `ai_context/ai_harness/rules/publication.md`
 
-The sync procedure is exposed as a skill:
-- `ai_context/ai_harness/skills/sync-articles/SKILL.md`
-
-## Skills
-
-| Skill | When to invoke |
-|---|---|
-| `sync-articles` | Copy finished drafts from `../ai_publish/publication/` into `publication/` here |
-| `sync-next-publishable` | Sync the next `READY` pack only (LinkedIn + Medium drafts and image assets) |
+This repo does not run sync tooling. Exports are executed from the private `ai_publish` repo and committed/pushed into
+this repo.
 
 ## Working model
 
 1. Draft/review in `../ai_publish/` (private)
-2. Sync into this repo (public mirror)
+2. Export into this repo (public mirror)
 3. Import from this repo into LinkedIn / Medium
 
 During sync:
