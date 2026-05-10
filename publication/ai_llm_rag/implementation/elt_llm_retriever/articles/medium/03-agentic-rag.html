@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Quality-Gated Agentic RAG: When the First Pass Isn't Good Enough</h1>
+<p>Single-pass RAG loves boilerplate. When fetching sparse entities, it often replaces usefulness with fluency. This is how to fix it by introducing a strict quality gate and an agentic fallback loop that only triggers when the deterministic paths fail.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>Single-pass RAG fails predictably on sparse entities: fluent boilerplate is not evidence.</li>
+<li>A quality gate turns “looks OK” into a measurable decision: pass, escalate, or return “not found”.</li>
+<li>A bounded agentic fallback loop is cheaper than reviewing everything: escalation only happens when the first pass fails.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You have a RAG pipeline that works for “common” concepts but collapses into boilerplate for sparse entities, and you need a programmatic way to gate quality.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>How to score an LLM output for “usefulness” without pretending you can measure truth directly</li>
+<li>Why a bounded agentic loop is cheaper than reviewing everything by hand</li>
+<li>How the turning points (boilerplate failure, missing evidence) shaped the final design</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Outputs must be auditable (sources and a “not found” outcome are valid results)</li>
+<li>Cost must be proportional to difficulty (easy cases stay cheap; hard cases escalate)</li>
+</ul>
+<h2>Why single-pass RAG fails for sparse entities</h2>
+<p>Standard RAG works like this: embed the query, retrieve the top K chunks, synthesise an answer. One retrieval call, one LLM call.</p>
+<p>For a well-documented entity — a common concept with multiple handbook sections referencing it — this works well. For a sparse entity — a term defined briefly in one clause, or a category with no dedicated section — it produces boilerplate:</p>
+<blockquote>
+<p>"This is an important concept in enterprise governance. It relates to the organisation's operational framework and compliance requirements."</p>
+</blockquote>
+<p>Technically fluent. Zero information content. Indistinguishable from a hallucinated non-answer.</p>
+<p>The goal was to enrich 175 enterprise architecture model entities with structured definitions, governance rules, and relationships from an internal governance handbook. A single-pass approach would return generic answers for roughly half of them. That is not good enough for a knowledge base intended to drive downstream systems.</p>
+<p>The solution: add a quality gate after every synthesis, and trigger a multi-step search loop when the gate rejects the output.</p>
+<h2>How the pipeline works</h2>
+<p>The full enrichment pipeline has seven stages, but the core logic lives in three enrichment paths that differ by cost and quality:</p>
+<pre><code>Query → Retrieval → Synthesis → Quality Gate
+                                    │
+                        ┌───────────┼───────────┐
+                     PASS         FAIL          FAIL (repeated)
+                        │           │               │
+                   cached_section  fast path    agentic loop
+                   (0 RAG calls)  (1 RAG call)  (2-5 RAG calls)
+</code></pre>
+<p>Each path escalates LLM cost in exchange for better answers.</p>
+<h2>Path 1: Cached Section (Zero LLM Calls)</h2>
+<p>During the discovery stage (Stage 1), the pipeline scans the entire handbook and identifies which sections contain each entity's name. When a section contains a dedicated passage for an entity, that passage text is cached directly.</p>
+<p>At enrichment time, if a cached section exists, it is passed directly to the LLM for synthesis — no RAG retrieval at all. The text is already authoritative. There is nothing to retrieve.</p>
+<p>For the handbook term catalog (431 candidates), approximately <strong>95% take the cached section path</strong>. The handbook is a well-structured glossary at its core, and most candidates have a dedicated definitional passage.</p>
+<p>For the entity catalog (175 enterprise architecture model entities), the proportion is lower — model abstractions (Application, Interface, Data Object) are not explicitly defined in the handbook. Those entities need retrieval.</p>
+<h2>Path 2: Fast Path (One RAG Call)</h2>
+<p>If no cached section exists, the pipeline runs a standard retrieval: embed the entity name, retrieve from the hybrid index (BM25 + dense vector, as described in the previous article), synthesise.</p>
+<p>Then the quality gate runs.</p>
+<h3>The Quality Gate</h3>
+<p>The gate scores the synthesis output on four weighted criteria:</p>
+<p><strong>Criterion — Weight — What It Checks</strong></p>
+<ul>
+<li>Length adequacy<ul>
+<li>0.30</li>
+<li><code>formal_definition</code> ≥ 200 chars, <code>governance_rules</code> ≥ 200 chars</li>
+</ul>
+</li>
+<li>Citation presence<ul>
+<li>0.30</li>
+<li>At least one handbook section referenced</li>
+</ul>
+</li>
+<li>Non-generic<ul>
+<li>0.20</li>
+<li>Does not contain boilerplate phrases ("important concept", "organisational framework")</li>
+</ul>
+</li>
+<li>Non-boilerplate<ul>
+<li>0.20</li>
+<li>Specific, actionable content — not filler</li>
+</ul>
+</li>
+</ul>
+<p>If the weighted score ≥ 0.5, the entity passes. The enriched record is written to the output catalog.</p>
+<p>If the score &lt; 0.5, the entity goes to the agentic loop.</p>
+<p>The 0.5 threshold was chosen empirically. Lower values allowed too many generic answers through. Higher values sent too many borderline-but-acceptable answers into unnecessary LLM calls.</p>
+<h2>Path 3: The Agentic Loop (Two to Five LLM Calls)</h2>
+<p>The agentic retriever runs a controlled search loop. At each iteration, the LLM receives:
+- The current synthesis output (what it has so far)
+- The current quality score
+- A set of available actions</p>
+<p>It selects one action:</p>
+<p><strong>Action — What It Does</strong></p>
+<ul>
+<li><strong><code>RETRIEVE</code></strong> — Re-run the retrieval with a modified query</li>
+<li><strong><code>KEYWORD</code></strong> — Scan all section headings for the entity name — targeted lookup</li>
+<li><strong><code>DONE</code></strong> — Accept the current synthesis, stop iterating</li>
+</ul>
+<p>The loop runs until the LLM selects <code>DONE</code>, or the quality gate passes, or a maximum iteration limit is reached (5 iterations).</p>
+<h3>Why KEYWORD Matters</h3>
+<p>The <code>KEYWORD</code> action is not a fallback — it is an intentional second search strategy. Dense vector + BM25 retrieval works from semantic similarity. For a rare or very specifically named entity, the query embedding may not pull the right chunks because the entity name appears in a section heading but not in the body text of any top-ranked chunk.</p>
+<p><code>KEYWORD</code> bypasses the embedding entirely and scans section headings for the exact entity name. This catches entries that vector search misses because the entity is named as a heading, not a body concept.</p>
+<h3>The DONE Override</h3>
+<p>There is one edge case where the LLM can select DONE even when the quality gate has not passed: if no useful content was found and no keyword scan has been attempted yet, the loop would waste iterations on retrieval calls that will return the same results. The LLM is instructed to select KEYWORD in this case.</p>
+<p>If the keyword scan also returns nothing, DONE is appropriate — the entity is genuinely absent from the handbook. The record is written with a low-confidence flag and moves to the manual review queue.</p>
+<h3>A Concrete Example: Market Segment</h3>
+<p>"Market Segment" is an enterprise architecture model entity. It represents a classification concept in the organisation’s data architecture. The handbook does not have a section titled "Market Segment".</p>
+<p><strong>Iteration 1 — RETRIEVE:</strong> The vector query returns sections about commercial partnerships and broadcast segments. Relevant for background context, but no formal definition. Quality score: 0.31.</p>
+<p><strong>Iteration 2 — KEYWORD:</strong> Scans section headings. Finds a clause in the commercial regulations section where "market segment" appears in the context of broadcast rights classification.</p>
+<p><strong>Iteration 3 — RETRIEVE (targeted):</strong> Re-runs retrieval with "broadcast market segment classification rights" as the query. Returns the specific clause and three related clauses about segment definitions.</p>
+<p>Quality score after synthesis: 0.67. Gate passes. Three iterations total.</p>
+<p>This pattern — vector gives you the topic neighbourhood, keyword gives you the exact anchor, targeted retrieval gives you the context — repeats across most agentic fallback cases.</p>
+<h2>What the system produced</h2>
+<h3>Entity Catalog (175 Enterprise Architecture Model Entities)</h3>
+<p><strong>Metric — Value</strong></p>
+<ul>
+<li><strong>Total entities</strong> — 175</li>
+<li><strong>BOTH (definition + rules)</strong> — 169 / 175</li>
+<li><strong>Fast path</strong> — 156 entities</li>
+<li><strong>Agentic fallback</strong> — 17 entities</li>
+<li><strong>Average iterations (agentic)</strong> — 1.1</li>
+<li><strong>Requires manual review</strong> — ~6</li>
+</ul>
+<p>169 out of 175 entities have both a formal definition and governance rules. The remaining 6 are model abstractions that genuinely do not appear in the handbook — correctly flagged for manual review rather than silently filled with boilerplate.</p>
+<h3>Handbook Catalog (431 Candidates)</h3>
+<p><strong>Metric — Value</strong></p>
+<ul>
+<li><strong>Total candidates</strong> — 431</li>
+<li><strong>Cached section path</strong> — ~95%</li>
+<li><strong>Fast path</strong> — ~4%</li>
+<li><strong>Agentic fallback</strong> — ~1%</li>
+<li><strong>Manual review queue</strong> — ~20</li>
+</ul>
+<p>The handbook is the source document, so most entries have explicit passages. The agentic loop is rarely needed here — when it triggers, it usually means the candidate is a cross-reference term defined elsewhere in the handbook.</p>
+<h2>The Two-Catalog Architecture</h2>
+<p>One design decision worth explaining: why two separate output catalogs rather than one consolidated one?</p>
+<p>The intuition for consolidation is appealing: merge <code>entity_catalog.json</code> (enterprise architecture model entities) and <code>handbook_catalog.json</code> (handbook candidates) into one unified record per concept.</p>
+<p>The problem: the two catalogs operate at different levels of abstraction.</p>
+<ul>
+<li><strong>entity_catalog.json</strong> reflects the conceptual model — abstract entities like "Application", "Interface", "Data Object", "Market Segment". These are architectural abstractions that may or may not have operational definitions in the handbook.</li>
+<li><strong>handbook_catalog.json</strong> reflects the handbook's own taxonomy — operational terms defined by the document rather than by the external model.</li>
+</ul>
+<p>A consolidated merge would over-report: some conceptual-model entities have no handbook definition (correct — the handbook does not attempt to define them). Some handbook terms have no conceptual-model counterpart (correct — the handbook defines roles and rules that predate the model).</p>
+<p>The 138 out of 175 "Not defined" entries in <code>entity_catalog.json</code> are the correct finding. The handbook operates at a more atomic, operational level and deliberately does not address all model abstractions. A consolidation pipeline would either generate false positives (linking handbook terms to model entities on weak matches) or mask the correct finding that the model has genuine definition gaps.</p>
+<p>Two catalogs, with known and intentional overlap where it exists, is the honest representation.</p>
+<h2>Architecture Decisions Summary</h2>
+<p><strong>Decision — Alternative Considered — Why This</strong></p>
+<ul>
+<li>Quality gate after synthesis<ul>
+<li>Trust the LLM, no gate</li>
+<li>~50% of naive single-pass outputs were boilerplate</li>
+</ul>
+</li>
+<li>Four-criterion weighted gate<ul>
+<li>Single criterion (length)</li>
+<li>Length alone misses fluent-but-generic outputs</li>
+</ul>
+</li>
+<li>Agentic loop with LLM action selection<ul>
+<li>Fixed retry strategy</li>
+<li>Entity-specific context drives better search strategy</li>
+</ul>
+</li>
+<li>KEYWORD action as explicit step<ul>
+<li>BM25 handles this</li>
+<li>Vector+BM25 still misses exact heading matches for rare terms</li>
+</ul>
+</li>
+<li>Two separate catalogs<ul>
+<li>Consolidated merge</li>
+<li>Different abstraction levels; merge would mask definition gaps</li>
+</ul>
+</li>
+<li>Manual review queue for low-confidence<ul>
+<li>Exclude or hallucinate</li>
+<li>Honest uncertainty tracking is more useful than false completeness</li>
+</ul>
+</li>
+</ul>
+<h2>What This Produces</h2>
+<p>The output of this pipeline is a structured knowledge base: two catalogs with 606 total entries, each containing a formal definition, governance rules, handbook citations, and confidence scores.</p>
+<p>This is not a chatbot that answers questions from a document. It is a structured knowledge artifact that can drive downstream systems — a governance glossary export (606 terms), a knowledge graph (894 nodes, 772 edges), and a query layer that any application can call.</p>
+<p>The quality gate ensures that downstream consumers receive either a real answer with a cited source, or an explicit "not found" flag. No silent boilerplate. No unattributed hallucinations.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>A quality gate scores “usefulness”, not truth. It is a control mechanism, not a correctness proof.</li>
+<li>Agentic fallback must be bounded (iterations, budgets). Unbounded loops are a reliability and cost risk.</li>
+<li>Thresholds and scoring weights are domain-dependent; treat the numbers as measured for one corpus.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; quality gate <code>min_score=0.5</code>, <code>min_length=150</code>; agentic fallback <code>max_iterations=5</code>; local inference</li>
+<li>Dataset class: internal governance handbook + enterprise architecture model (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompt templates, internal contracts, and vendor-specific export wiring</li>
+</ul>
+<p><em>This is the third in a series on building a local-first AI platform for enterprise governance knowledge. The previous article covered hybrid retrieval (BM25 + dense vector + reranker). The next covers the knowledge graph built on top of these catalog outputs.</em></p>
+
+</body>
+</html>

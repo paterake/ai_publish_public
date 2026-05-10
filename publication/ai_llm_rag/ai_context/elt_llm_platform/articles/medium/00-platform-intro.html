@@ -20,26 +20,11 @@
 standard AI tutorial assumes is a cloud service has a local equivalent:</p>
 <p><strong>Standard tutorial assumption — This platform</strong></p>
 <ul>
-<li>OpenAI / Anthropic API<ul>
-<li>Ollama — local inference runtime</li>
-</ul>
-</li>
-<li>OpenAI embeddings API<ul>
-<li>nomic-embed-text via Ollama</li>
-</ul>
-</li>
-<li>Pinecone / Weaviate<ul>
-<li>ChromaDB — local vector store</li>
-</ul>
-</li>
-<li>AWS Textract / Google Document AI<ul>
-<li>Docling — local PDF extraction</li>
-</ul>
-</li>
-<li>Neo4j cloud<ul>
-<li>NetworkX — in-memory graph</li>
-</ul>
-</li>
+<li><strong>OpenAI / Anthropic API</strong> — Ollama — local inference runtime</li>
+<li><strong>OpenAI embeddings API</strong> — nomic-embed-text via Ollama</li>
+<li><strong>Pinecone / Weaviate</strong> — ChromaDB — local vector store</li>
+<li><strong>AWS Textract / Google Document AI</strong> — Docling — local PDF extraction</li>
+<li><strong>Neo4j cloud</strong> — NetworkX — in-memory graph</li>
 </ul>
 <p>These are not workarounds. The constraint forces a more disciplined system: every dependency is explicit, every operation is repeatable, and you can run end-to-end without network access.</p>
 <p>Most people treat this as a limitation. I treated it as a design requirement. The architecture
