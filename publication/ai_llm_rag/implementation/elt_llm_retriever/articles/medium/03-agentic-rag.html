@@ -33,16 +33,12 @@
 <p>The goal was to enrich 175 enterprise architecture model entities with structured definitions, governance rules, and relationships from an internal governance handbook. A single-pass approach would return generic answers for roughly half of them. That is not good enough for a knowledge base intended to drive downstream systems.</p>
 <p>The solution: add a quality gate after every synthesis, and trigger a multi-step search loop when the gate rejects the output.</p>
 <h2>How the pipeline works</h2>
-<p>The full enrichment pipeline has seven stages, but the core logic lives in three enrichment paths that differ by cost and quality:</p>
-<pre><code>Query → Retrieval → Synthesis → Quality Gate
-                                    │
-                        ┌───────────┼───────────┐
-                     PASS         FAIL          FAIL (repeated)
-                        │           │               │
-                   cached_section  fast path    agentic loop
-                   (0 RAG calls)  (1 RAG call)  (2-5 RAG calls)
-</code></pre>
-<p>Each path escalates LLM cost in exchange for better answers.</p>
+<p>The full enrichment pipeline has seven stages, but the core logic lives in three enrichment paths that escalate in cost:</p>
+<ul>
+<li><strong>Cached section</strong> (0 RAG calls) — entity has a pre-identified passage; synthesise directly, no retrieval</li>
+<li><strong>Fast path</strong> (1 RAG call) — standard retrieval and synthesis; quality gate passes on first attempt</li>
+<li><strong>Agentic loop</strong> (2–5 RAG calls) — quality gate fails; iterative retrieval with self-correction</li>
+</ul>
 <h2>Path 1: Cached Section (Zero LLM Calls)</h2>
 <p>During the discovery stage (Stage 1), the pipeline scans the entire handbook and identifies which sections contain each entity's name. When a section contains a dedicated passage for an entity, that passage text is cached directly.</p>
 <p>At enrichment time, if a cached section exists, it is passed directly to the LLM for synthesis — no RAG retrieval at all. The text is already authoritative. There is nothing to retrieve.</p>
@@ -55,26 +51,10 @@
 <p>The gate scores the synthesis output on four weighted criteria:</p>
 <p><strong>Criterion — Weight — What It Checks</strong></p>
 <ul>
-<li>Length adequacy<ul>
-<li>0.30</li>
-<li><code>formal_definition</code> ≥ 200 chars, <code>governance_rules</code> ≥ 200 chars</li>
-</ul>
-</li>
-<li>Citation presence<ul>
-<li>0.30</li>
-<li>At least one handbook section referenced</li>
-</ul>
-</li>
-<li>Non-generic<ul>
-<li>0.20</li>
-<li>Does not contain boilerplate phrases ("important concept", "organisational framework")</li>
-</ul>
-</li>
-<li>Non-boilerplate<ul>
-<li>0.20</li>
-<li>Specific, actionable content — not filler</li>
-</ul>
-</li>
+<li><strong>Length adequacy</strong> — 0.30 — <code>formal_definition</code> ≥ 200 chars, <code>governance_rules</code> ≥ 200 chars</li>
+<li><strong>Citation presence</strong> — 0.30 — At least one handbook section referenced</li>
+<li><strong>Non-generic</strong> — 0.20 — Does not contain boilerplate phrases ("important concept", "organisational framework")</li>
+<li><strong>Non-boilerplate</strong> — 0.20 — Specific, actionable content — not filler</li>
 </ul>
 <p>If the weighted score ≥ 0.5, the entity passes. The enriched record is written to the output catalog.</p>
 <p>If the score &lt; 0.5, the entity goes to the agentic loop.</p>
@@ -141,36 +121,12 @@
 <h2>Architecture Decisions Summary</h2>
 <p><strong>Decision — Alternative Considered — Why This</strong></p>
 <ul>
-<li>Quality gate after synthesis<ul>
-<li>Trust the LLM, no gate</li>
-<li>~50% of naive single-pass outputs were boilerplate</li>
-</ul>
-</li>
-<li>Four-criterion weighted gate<ul>
-<li>Single criterion (length)</li>
-<li>Length alone misses fluent-but-generic outputs</li>
-</ul>
-</li>
-<li>Agentic loop with LLM action selection<ul>
-<li>Fixed retry strategy</li>
-<li>Entity-specific context drives better search strategy</li>
-</ul>
-</li>
-<li>KEYWORD action as explicit step<ul>
-<li>BM25 handles this</li>
-<li>Vector+BM25 still misses exact heading matches for rare terms</li>
-</ul>
-</li>
-<li>Two separate catalogs<ul>
-<li>Consolidated merge</li>
-<li>Different abstraction levels; merge would mask definition gaps</li>
-</ul>
-</li>
-<li>Manual review queue for low-confidence<ul>
-<li>Exclude or hallucinate</li>
-<li>Honest uncertainty tracking is more useful than false completeness</li>
-</ul>
-</li>
+<li><strong>Quality gate after synthesis</strong> — Trust the LLM, no gate — ~50% of naive single-pass outputs were boilerplate</li>
+<li><strong>Four-criterion weighted gate</strong> — Single criterion (length) — Length alone misses fluent-but-generic outputs</li>
+<li><strong>Agentic loop with LLM action selection</strong> — Fixed retry strategy — Entity-specific context drives better search strategy</li>
+<li><strong>KEYWORD action as explicit step</strong> — BM25 handles this — Vector+BM25 still misses exact heading matches for rare terms</li>
+<li><strong>Two separate catalogs</strong> — Consolidated merge — Different abstraction levels; merge would mask definition gaps</li>
+<li><strong>Manual review queue for low-confidence</strong> — Exclude or hallucinate — Honest uncertainty tracking is more useful than false completeness</li>
 </ul>
 <h2>What This Produces</h2>
 <p>The output of this pipeline is a structured knowledge base: two catalogs with 606 total entries, each containing a formal definition, governance rules, handbook citations, and confidence scores.</p>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Two Query Surfaces, One Orchestration Layer</h1>
+<h2>Key takeaways</h2>
+<ul>
+<li>One orchestration layer, two contract surfaces: MCP for developers and IDE assistants, HTTP for consumers and systems. The routing logic and tool behaviour are identical — only the integration contract differs.</li>
+<li>Not every question needs RAG. Route to the cheapest correct source: deterministic JSON lookup for extracted records, graph traversal for relationships, RAG only for unstructured text that requires synthesis.</li>
+<li>The decision rule for adding a new tool: "Can a junior dev script this directly from the file?" — if yes, don't use RAG. Applying this rule prevented days of wasted effort trying to RAG over structured JSON and XML sources.</li>
+</ul>
+<p>Think of an AI assistant as a person walking into a library with a question. The librarian — the MCP server — does not store the information. They know where everything is, what each source contains, and how to retrieve it usefully. They hold the catalog. The books, the databases, the digital files: those are the information stores. The librarian decides what is <em>findable</em>. The content producers decide what exists. These are different responsibilities, and keeping them separate is the whole design.</p>
+<p>The hard part of agents isn’t the models. It’s the contracts: what tools the librarian offers, what they return, and what’s allowed. This is the architecture for exposing one orchestrator via both MCP and HTTP, with strictly bounded tools.</p>
+<p>It is deciding what the assistant is allowed to do, how it proves what it did, and how you expose the same capability to multiple clients without rewriting the system for each integration.</p>
+<p>This article is the story of building two query surfaces on top of one knowledge base:</p>
+<ul>
+<li>an MCP server for developer tooling and IDE assistants</li>
+<li>an HTTP agent for non-technical consumers and systems</li>
+</ul>
+<p>Both call the same orchestration layer. The difference is the contract surface.</p>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+</ul>
+<h2>Why Integration Sprawl and Unbounded “Agent Power” fails at scale</h2>
+<p>Teams build a useful internal RAG system, then immediately hit a second problem: how do people actually use it?</p>
+<p>The naive path is to integrate separately:</p>
+<ul>
+<li>a bespoke VS Code plugin</li>
+<li>a separate integration for a desktop assistant</li>
+<li>a separate API wrapper for programmatic callers</li>
+</ul>
+<p>Each integration becomes its own little product. And the agent surface drifts: different defaults, different
+tool sets, different “what is allowed” rules.</p>
+<p>At the same time, most “agent” examples start from an unsafe premise: give the model tools, let it decide.
+That works until the first time it runs the wrong command or returns a fluent answer with no evidence.</p>
+<h2>What most teams try first: Ship One Interface and Keep Adding Exceptions</h2>
+<p>If you ship only a chat UI, engineers ask for programmatic access.
+If you ship only an API, non-technical users ask for a UI.
+If you ship an IDE integration, someone asks for it in a different IDE.</p>
+<p>The first version is always simple. The second version is where you either create a contract surface, or you
+end up with multiple forks of the same system.</p>
+<h2>How the solution works: One Orchestrator, Two Contract Surfaces</h2>
+<p>The core design decision is that “asking the knowledge base” is not an interface. It is a capability.</p>
+<p>So we treat the orchestration logic as the stable centre, and we expose it through two surfaces:</p>
+<ol>
+<li><strong>MCP server</strong> — tools, resources, and prompts (for IDE assistants and MCP clients)</li>
+<li><strong>HTTP agent</strong> — a tool-calling agent wrapped behind a web API (for consumers and systems)</li>
+</ol>
+<p>The interfaces differ. The orchestration layer does not.</p>
+<p>That prevents drift: the same tool implementations, the same defaults, the same quality posture.</p>
+<h2>Query Routing: Not Every Question Needs RAG</h2>
+<p>The MCP layer routes each query to the cheapest data source that gives a correct, stable answer. This is not a
+default assumption — it is the core design decision.</p>
+<p><strong>Query type — Tool — Data source — Why not RAG?</strong></p>
+<ul>
+<li><strong>Entity definition or governance rules</strong> — <code>lookup_json_record</code> — Catalog JSON — Definition is already extracted and stored; deterministic, low-latency</li>
+<li><strong>Candidate / gap entity</strong> — <code>lookup_json_record</code> — Candidate catalog JSON — LLM already ran during the retrieval pipeline</li>
+<li><strong>Reference values and enumerations</strong> — <code>lookup_json_record</code> — Reference data JSON — Enumerated lists — no inference needed</li>
+<li><strong>Relationship traversal, governance chain</strong> — <code>query_graph</code> — Knowledge graph (NetworkX) — Graph traversal is O(hops), not O(chunks); no LLM variance</li>
+<li><strong>Governance rules, obligations, policy text</strong> — <code>query_rag</code> — ChromaDB + BM25 — Unstructured; requires semantic retrieval across many chunks</li>
+</ul>
+<p><strong>The decision rule for adding a new tool:</strong></p>
+<blockquote>
+<p>“Can a junior dev script this directly from the file?” — if yes, don’t use RAG.</p>
+</blockquote>
+<p>This rule prevented days of wasted effort trying to RAG over enterprise architecture model XML and inventory JSON.
+Both are structured files with stable keys — a direct read is faster, deterministic, and produces a better answer.
+RAG adds LLM variance with no benefit when the file can be parsed directly.</p>
+<p><strong>Compound queries — chaining tools for complex questions:</strong></p>
+<p>Some questions span multiple data sources. For a compound query like “Tell me about Club governance”, the MCP host (Claude) chains three tool calls in sequence:</p>
+<ol>
+<li><code>lookup_json_record(“Club”)</code> — retrieves the formal definition from the catalog JSON</li>
+<li><code>query_graph(“Club”, hops=1)</code> — retrieves direct governance relationships from the knowledge graph</li>
+<li><code>query_rag(“Club governance rules”)</code> — retrieves handbook obligations and rule citations</li>
+</ol>
+<p>All three results are then synthesised into one grounded answer.</p>
+<p>No single tool can answer this correctly. The value of the orchestration layer is that all three can be called
+in sequence by the host and composed into a grounded answer.</p>
+<h2>What Makes MCP Production Work (It’s Not the Protocol)</h2>
+<p>MCP is the wire format. Production work is everything around it:</p>
+<ul>
+<li><strong>Tool contracts</strong>: input schema, output schema, error taxonomy</li>
+<li><strong>Allowlist posture</strong>: only explicitly approved pipeline commands are runnable</li>
+<li><strong>Transport discipline</strong>: stdio servers must keep stdout clean; only protocol messages are emitted</li>
+<li><strong>Config-driven defaults</strong>: tool defaults and resource mappings are not hardcoded; they are declared</li>
+</ul>
+<p><strong>Confidence scoring:</strong> <code>query_rag</code> returns a <code>confidence_score</code> field alongside the answer and sources. It
+averages the top retrieval scores and applies <code>1 - exp(-avg)</code> to map to a 0–1 range. Low confidence is a
+signal to the host to flag the answer for human review rather than accepting it silently.</p>
+<p>This is the part that looks boring in demos and is essential in real systems.</p>
+<p>Here is the minimal shape of a “safe tool surface”:</p>
+<ul>
+<li>tools return structured JSON with explicit error fields</li>
+<li>long-running tools are bounded and observable</li>
+<li>resources resolve to files via templates (output roots, collection prefixes)</li>
+<li>pipeline execution is allowlisted (no arbitrary shell execution)</li>
+</ul>
+<h2>Result: Two Interfaces, One Behaviour</h2>
+<p>When the contract surface is explicit, you can expose the same system to different clients without rewriting
+the engine.</p>
+<p>The MCP server becomes the developer interface: query, look up a record, list collections, run a pipeline.</p>
+<p>The HTTP agent becomes the consumer interface: ask a question, receive an answer with sources and a trace of
+what tools were called.</p>
+<p>The tool contract shapes are stable. A <code>list_collections</code> call returns:</p>
+<pre><code class="language-json">{ &quot;prefix&quot;: &quot;governance_handbook&quot;, &quot;collections&quot;: [&quot;governance_handbook_s01&quot;, &quot;governance_handbook_s02&quot;], &quot;count&quot;: 2 }
+</code></pre>
+<p>A <code>query_rag</code> call returns answer, sources with per-chunk scores, and a confidence score:</p>
+<pre><code class="language-json">{
+  &quot;answer&quot;: &quot;…&quot;,
+  &quot;sources&quot;: [{ &quot;metadata&quot;: { &quot;collection&quot;: &quot;governance_handbook_s07&quot;, &quot;document_id&quot;: &quot;…&quot; }, &quot;score&quot;: 0.82 }],
+  &quot;confidence_score&quot;: 0.87,
+  &quot;collections_queried&quot;: [&quot;governance_handbook_s07&quot;, &quot;governance_handbook_s40&quot;]
+}
+</code></pre>
+<p>A <code>query_graph</code> governance chain call returns a traversal result with no LLM involved:</p>
+<pre><code class="language-json">{ &quot;query&quot;: &quot;governance_chain&quot;, &quot;entity&quot;: &quot;Role&quot;, &quot;chain&quot;: [&quot;Role&quot;, &quot;…&quot;, &quot;the governing body&quot;] }
+</code></pre>
+<h2>Architecture Decisions Summary</h2>
+<p><strong>Decision — Alternative Considered — Why This</strong></p>
+<ul>
+<li><strong>One orchestration layer, two surfaces (MCP + HTTP)</strong> — Separate implementations per surface — Single implementation prevents tool behaviour drifting between surfaces</li>
+<li><strong>Route to cheapest correct source (JSON → graph → RAG)</strong> — RAG for all questions — Deterministic sources eliminate LLM variance on questions that don't need synthesis</li>
+<li><strong>Decision rule: “can a junior dev script this from the file?”</strong> — Case-by-case judgment — Explicit rule prevented RAG from being applied to structured JSON and XML — saved implementation effort and degraded answers</li>
+<li><strong>Allowlist posture for pipeline execution</strong> — Open shell execution — Unbounded shell access from an MCP server is a security risk; allowlisting limits blast radius</li>
+<li><strong>Config-driven defaults (collection prefix, paths, iterative mode)</strong> — Hardcoded values in server code — Domain-agnostic server; reference config ships separately and is swapped per deployment</li>
+<li><strong>Confidence score on <code>query_rag</code> output</strong> — Answer only — Host needs a signal to trigger human review; confidence without a formula is noise</li>
+<li><strong>Structured error returns (never exceptions)</strong> — Let exceptions propagate to host — MCP hosts cannot handle unstructured exceptions; structured errors allow the host to display or route them gracefully</li>
+<li><strong>stdio transport as default; streamable-http as optional</strong> — HTTP-only — stdio is the correct transport for local Claude Desktop / IDE integrations; stdout cleanliness is mandatory</li>
+</ul>
+<h2>The Lesson: Treat “Agent” as a Contract Problem</h2>
+<p>If you think of an agent as “a model that can do things”, you will build an unsafe system.</p>
+<p>If you think of an agent as “a caller of bounded tools with explicit contracts”, you end up with a system that
+can be exposed widely without losing control.</p>
+<p>MCP is valuable because it makes the contract surface portable across clients.
+The orchestrator is valuable because it keeps behaviour consistent across surfaces.</p>
+<p>That is the path from “demo agent” to “operator surface”.</p>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; <code>defaults.iterative=true</code>; <code>defaults.collection_prefix=&lt;prefix&gt;</code>; <code>paths.rag_config=&lt;rag profile&gt;</code>; <code>paths.retriever_config=&lt;retriever profile&gt;</code>; JSON lookup schema <code>{list_key, name_key}</code></li>
+<li>Dataset class: internal governance handbook + enterprise architecture model (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>Remote transports require authentication and rate limiting before they are production-safe.</li>
+<li>The allowlist posture must remain tight; a permissive tool surface is a security risk.</li>
+</ul>
+
+</body>
+</html>

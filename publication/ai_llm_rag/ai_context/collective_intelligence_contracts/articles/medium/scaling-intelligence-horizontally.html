@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Scaling Intelligence Horizontally (Without Scaling Chaos)</h1>
+<p>Adding a second AI assistant felt like a productivity upgrade.</p>
+<p>Adding a third felt like a reliability downgrade.</p>
+<p>Output went up. So did drift: one assistant would apply a constraint that the next assistant never saw; a third would “tidy” something that looked redundant locally but was load-bearing globally. After a few weeks, the hard part stopped being implementation. The hard part was keeping the system coherent across sessions.</p>
+<p>That is the moment most teams misdiagnose.</p>
+<p>They assume they need a better model, more autonomy, or a bigger context window. In practice, scaling AI-assisted work is less like hiring a smarter individual contributor and more like scaling a distributed team: you need shared intent, shared context, and enforcement that outlives any single conversation.</p>
+<p>This article is a set of patterns for doing that in an engineering repo. No special agent framework required.</p>
+<h2>The bottleneck is coordination, not capability</h2>
+<p>If you run one assistant for one person, you can rely on a lot of unspoken glue:</p>
+<ul>
+<li>you remember why a rule exists</li>
+<li>you recognise when a “clean-up” risks deleting a constraint</li>
+<li>you know where the canonical documentation lives</li>
+<li>you notice a missing update because the absence is visible in your head</li>
+</ul>
+<p>As soon as you scale across assistants and across time, that glue stops scaling. The failure modes are predictable:</p>
+<ul>
+<li><strong>Local correctness, global erosion.</strong> An edit is reasonable in isolation but gradually deletes the scaffolding that made the system safe.</li>
+<li><strong>State resets.</strong> Each session spends time re-triaging, re-deriving decisions, and re-learning constraints.</li>
+<li><strong>Non-portable memory.</strong> A tool’s private memory (if it exists) cannot be assumed to survive tool switches, reinstallations, or new machines.</li>
+<li><strong>Silent divergence.</strong> Different assistants behave differently because they load different rules, different context, or different “defaults”.</li>
+</ul>
+<p>If you want the system to get better as you add assistants, you need progress to compound instead of reset. That requires a small set of governance layers.</p>
+<h2>A practical definition of “horizontal scaling”</h2>
+<p>When people say “scale intelligence horizontally”, they often mean “run more agents”.</p>
+<p>That is only the capacity side. Horizontal scaling that actually improves outcomes has a different property:</p>
+<blockquote>
+<p>A later session inherits the important constraints discovered by earlier sessions, without relying on anyone remembering them.</p>
+</blockquote>
+<p>In other words: <strong>alignment, continuity, and enforcement</strong> become shared infrastructure.</p>
+<p>I’ve found it useful to think in three layers:</p>
+<ol>
+<li><strong>Alignment layer (intent):</strong> what we are doing, what we are not doing, and what “done” means.</li>
+<li><strong>Continuity layer (context):</strong> what must persist across sessions so progress compounds.</li>
+<li><strong>Enforcement layer (guardrails):</strong> how you make the important constraints hard to forget.</li>
+</ol>
+<p>None of these require you to claim your assistants “think together”. They make something more achievable: your work becomes coherent across assistants.</p>
+<h2>Layer 1: Alignment (make intent explicit)</h2>
+<p>Alignment is not “a good prompt”. It is an explicit, durable definition of the collaboration contract.</p>
+<p>In practice, that means a small number of documents and conventions that answer questions like:</p>
+<ul>
+<li>Where is the single source of truth for standards?</li>
+<li>Which files are authoritative and which are derived?</li>
+<li>What must be true before something can be published?</li>
+<li>What does “review” mean when an assistant can touch dozens of files?</li>
+</ul>
+<p>Two patterns matter here.</p>
+<h3>Pattern A: One canonical home for standards</h3>
+<p>Choose a single location where the project’s standards live and keep them stable:</p>
+<ul>
+<li>documentation standards</li>
+<li>operational constraints (budgets, timeouts, degrade modes)</li>
+<li>naming and reuse rules</li>
+<li>publishing safety (privacy, IP, evidence discipline)</li>
+</ul>
+<p>The key is not the content. It is the <strong>one-home rule</strong>: standards are not duplicated into tool-specific configuration files or scattered into ad-hoc readmes.</p>
+<p>When you do this, assistants can be wrong locally but the system stays right globally: any assistant can be told “read the standards, then act”.</p>
+<h3>Pattern B: Treat “definition of done” as a contract, not an aspiration</h3>
+<p>When the work is AI-assisted, “definition of done” needs to include things humans forget under speed:</p>
+<ul>
+<li>the docs that make the change usable</li>
+<li>the evidence that supports any performance claim</li>
+<li>the registration work that prevents new work from becoming “invisible”</li>
+</ul>
+<p>If “done” is not explicit, every assistant will invent its own version. You get output, but you do not get coherence.</p>
+<h2>Layer 2: Continuity (make context durable)</h2>
+<p>Continuity is where most “horizontal scaling” stories fall apart.</p>
+<p>A long context window gives you more transient text. It does not give you durable state. You still need a system of record that survives:</p>
+<ul>
+<li>summarisation and compression</li>
+<li>tool switching</li>
+<li>short sessions</li>
+<li>machine wipes</li>
+<li>different assistants with different default behaviours</li>
+</ul>
+<p>Three continuity patterns are worth adopting.</p>
+<h3>Pattern C: The repo is the memory; the session is ephemeral</h3>
+<p>Assume every conversation ends abruptly. Design the system so the next session can start cold and still be productive.</p>
+<p>This is less about technology and more about where you put state:</p>
+<ul>
+<li>decisions that must persist go into a durable, versioned place</li>
+<li>in-flight thinking can be transient, but it must not be the only copy</li>
+</ul>
+<p>If you want horizontal scaling, you must be able to onboard a new assistant (or a new engineer) without a long oral history.</p>
+<h3>Pattern D: Durable backlogs with stable anchors</h3>
+<p>A backlog is not just a list of tasks. It is the hand-off protocol between sessions.</p>
+<p>The minimum requirement is stability: identifiers that do not move, and short hand-off context that allows the next session to pick up without re-triage. The mechanics can vary, but the principle is constant:</p>
+<blockquote>
+<p>The backlog should contain enough information that a cold-starting assistant can take the next action safely.</p>
+</blockquote>
+<p>When this is in place, you stop relying on “remember what we decided last week” and start relying on “read the next hand-off”.</p>
+<h3>Pattern E: Evidence discipline, not just narrative discipline</h3>
+<p>As soon as you publish (internally or externally), the story becomes an API: people repeat it.</p>
+<p>So the continuity layer needs an evidence mechanism:</p>
+<ul>
+<li>claims that require proof are marked explicitly until proven</li>
+<li>the evidence artefact is referenced in a durable location</li>
+<li>numbers are time-scoped and conditions are recorded</li>
+</ul>
+<p>This is not about avoiding embarrassment. It is about ensuring the system does not slowly turn into folklore.</p>
+<h2>Layer 3: Enforcement (make the important constraints hard to miss)</h2>
+<p>If your governance relies on an assistant remembering a rule, it will eventually drift.</p>
+<p>Enforcement is what makes horizontal scaling real: the rules become properties of the system, not preferences of the current session.</p>
+<p>You do not need a heavy governance programme. You need two types of guardrail.</p>
+<h3>Pattern F: Executable contracts (make drift loud)</h3>
+<p>Any rule that matters enough to state should be checkable.</p>
+<p>Common examples:</p>
+<ul>
+<li>the project must have required entrypoints</li>
+<li>new packs must be registered so they are discoverable</li>
+<li>publishable drafts must not contain private filesystem paths or internal scaffolding</li>
+<li>skills and procedures must reference canonical standards instead of duplicating them</li>
+</ul>
+<p>When these checks exist, the assistant can still be creative inside the sandbox, but it cannot quietly violate the collaboration contract.</p>
+<h3>Pattern G: Procedures over prose (encode repeatable operations)</h3>
+<p>If a process matters, encode it as a procedure:</p>
+<ul>
+<li>“onboard a new module”</li>
+<li>“regenerate the publication path”</li>
+<li>“audit coverage and gaps”</li>
+<li>“review a draft against the sources”</li>
+</ul>
+<p>The reason is not convenience. It is repeatability. A procedure is the same across sessions; prose is reinterpreted.</p>
+<p>This also improves cost and speed as a side-effect. When procedures exist, assistants do not need to re-derive how the system works. They execute the same playbook.</p>
+<h2>Putting it together: a minimal implementation plan</h2>
+<p>If you want to adopt these patterns in an existing repo, start small. The goal is not “perfect governance”. The goal is compounding progress.</p>
+<ol>
+<li>
+<p><strong>Write the alignment contract.</strong>
+Cover: where standards live; what is authoritative vs derived; what “done” means for the work you do most often.</p>
+</li>
+<li>
+<p><strong>Choose one durable system of record for state.</strong>
+Use: a backlog with stable anchors; a small set of decision notes; an evidence register for claims you repeat.</p>
+</li>
+<li>
+<p><strong>Add one executable guardrail that fails loudly.</strong>
+Start with a simple validator, aimed at your highest-risk failure mode: privacy leaks, missing documentation, or invisible work.</p>
+</li>
+<li>
+<p><strong>Turn one repeated workflow into a procedure.</strong>
+Replace “remember how we do this” with “run the procedure”.</p>
+</li>
+<li>
+<p><strong>Measure drift reduction, not token usage.</strong>
+Look for fewer re-triage cycles. The real win is that assistants become interchangeable without losing coherence.</p>
+</li>
+</ol>
+<p>The surprising result is that safer systems are usually cheaper systems. The same boundaries that prevent drift also reduce the need to load sprawling context.</p>
+<h2>The honest limit</h2>
+<p>These patterns do not magically turn multiple assistants into a single mind. They do something more valuable for most engineering teams:</p>
+<ul>
+<li>progress compounds across sessions</li>
+<li>the important constraints become durable</li>
+<li>safety and quality stop depending on the current assistant’s memory</li>
+</ul>
+<p>That is what horizontal scaling looks like in practice: not more agents, but a better substrate for collaboration.</p>
+<p>Question: if you added a second AI assistant tomorrow, what is the first constraint you would want it to inherit automatically — and what would you need to make that inheritance reliable?</p>
+
+</body>
+</html>

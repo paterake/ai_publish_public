@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The LLMOps Foundation: 13 Primitives, Zero Cloud Dependencies</h1>
+<p>A quality regression appeared in the retrieval pipeline. Without shared infrastructure it
+would have been invisible — a worse answer, silently delivered. With it, the eval gate
+flagged it in CI, the baseline comparison showed exactly which metric dropped, and the
+telemetry stream pointed to which run introduced the change. That is the difference between
+a platform you can operate and one you can only hope works.</p>
+<p>This article is about the shared substrate that makes multi-module AI operable: 13 LLMOps
+primitives, all offline-capable, all OSS-backed, built once and inherited by every module
+in the platform.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>13 LLMOps primitives — eval, caching, guardrails, circuit breaking, telemetry, lineage —
+  built once, used by ten modules, no cloud dependency required.</li>
+<li>We built custom implementations first (to understand the contracts), then replaced each
+  infrastructure primitive with the industry-standard OSS library.</li>
+<li>What remains custom is the integration layer that no single library provides: run
+  correlation, content-safe telemetry, manifests, and policy packs.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You are building a multi-module AI system. You have noticed that quality regressions are
+invisible, failures are undiagnosable, and every module has reinvented telemetry and retry
+logic in its own incompatible way. Or you skipped LLMOps entirely and are now wondering
+why production behaviour is unpredictable.</p>
+<h2>What you will learn</h2>
+<ul>
+<li>What a complete, offline-capable LLMOps substrate looks like — all 13 primitives</li>
+<li>Why we built custom implementations first, and then replaced them with OSS libraries</li>
+<li>What stays custom, and why — the integration layer that no library provides</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first operation, zero data egress — cloud LLM APIs and SaaS LLMOps platforms are
+  not available</li>
+<li>Sensitive data cannot appear in logs or telemetry streams</li>
+</ul>
+<h2>The Problem: What Goes Wrong Without a Shared Substrate</h2>
+<p>Once a system has five modules — ingestion, query, retrieval, graph, agent — the naive
+approach is to let each one define its own config schema, log in its own format, invent its
+own run identifiers, and handle retries however it chooses. Everything works. Until it does
+not.</p>
+<p>A quality regression in the retrieval output has no visible cause. An embedding call starts
+failing intermittently — which module? Which run? A batch pipeline silently exhausts its
+token budget and returns empty responses. A circuit opens and nobody notices until a user
+reports a timeout.</p>
+<p>These are not model problems. They are missing infrastructure: no run correlation across
+modules, no eval gate, no circuit breaker, no feedback loop. Every module re-implements these
+primitives badly and inconsistently.</p>
+<p>The turning point is recognising that operational consistency is a feature, not a refactor.
+And the right time to build it is before the second module, not after the fifth.</p>
+<h2>The Naive Approach: Build It All Custom</h2>
+<p>The initial approach was direct: build the primitives as custom code. Eval harness: a
+hand-written judge with expected-based scoring. Circuit breaker: a custom open/half-open/
+closed state machine. Retry logic: a manual backoff loop with exception matching. Guardrails:
+regex tripwires for PII and injection patterns.</p>
+<p>It worked. Each primitive did what it needed to do. But the maintenance surface grew with
+every module that consumed them, and a simple question had no good answer: "why didn't you
+just use RAGAS?"</p>
+<p>The honest answer: because we built the eval harness before we understood what contract it
+needed to satisfy. Once the contract was clear — what event shape it must emit, where the
+CI boundary must fall, what baseline comparison it must support — the OSS migration became
+a mechanical swap, not a redesign.</p>
+<p>This is the build-order lesson embedded in the journey: you cannot choose the right library
+for a problem you do not yet understand. Build custom first to establish the contract. Then
+replace the implementation while keeping the contract intact.</p>
+<h2>The 13 Primitives</h2>
+<p>A shared core package (called <code>elt_llm_core</code> in this codebase) provides 13 primitives. Every module in the platform can opt in by
+calling these helpers — nothing runs unless a module invokes them.</p>
+<p><strong># — Primitive — What it does</strong></p>
+<ul>
+<li><strong>1</strong> — Run correlation (<code>run_id</code>) — Propagates a shared identifier across all modules so any telemetry, manifest, or artefact written during a run can be correlated end-to-end</li>
+<li><strong>2</strong> — Structured telemetry — Emits JSON events (LLM call, tool call, eval result, feedback) to application logs and optionally to a JSONL file; content-safe by default</li>
+<li><strong>3</strong> — Embedding observability — Wraps embedding calls to emit <code>tool_call</code> telemetry and track per-run counters (calls, batches, texts, failures)</li>
+<li><strong>4</strong> — Lineage manifests — Writes <code>run_manifest.json</code> and <code>corpus_manifest.json</code> — replayable lineage records keyed by <code>run_id</code></li>
+<li><strong>5</strong> — Cost estimation — Token estimation and GBP pricing model; <code>llm_call</code> events carry <code>prompt_tokens_est</code>, <code>output_tokens_est</code>, <code>cost_gbp_est</code></li>
+<li><strong>6</strong> — Cost guardrails — Optional per-run budgets enforced before each LLM call; failures emit <code>error_type=budget_exceeded</code> telemetry</li>
+<li><strong>7</strong> — LlamaIndex + OpenTelemetry tracing — LlamaIndex callback instrumentation with optional OTLP span export; JSONL spans for offline trace analysis</li>
+<li><strong>8</strong> — Contract helpers — <code>exception_to_error</code> and <code>normalise_tool_result</code> — stable error/result envelopes at module boundaries</li>
+<li><strong>9</strong> — Evaluation harness — Two-mode dispatch: deterministic expected-based (CI, zero LLM calls) and RAGAS judge-mode (faithfulness, answer relevance, context precision); objective retrieval metrics (Hit@k, MRR, NDCG)</li>
+<li><strong>10</strong> — Feedback events (HITL) — Standard feedback schema tied to <code>run_id</code>; dataset export utility for privacy-safe analysis</li>
+<li><strong>11</strong> — Semantic cache + guardrails + artifact registry — Embedding-based semantic cache (JSONL or Redis backend); semantic guardrails (PII + injection); artifact snapshot/promotion/rollback pointers</li>
+<li><strong>12</strong> — Ops reporting + retention — Offline drift/performance report from telemetry; age/size-based cleanup for telemetry, traces, manifests</li>
+<li><strong>13</strong> — Artifact promotion / rollback — CLI for promoting corpus, graph, and index snapshots to named pointers (<code>production.txt</code>); rollback is a re-promotion</li>
+</ul>
+<p>Every module that consumes the core package gets all 13 primitives. They do not each define
+their own config schema, model factory, or telemetry sink. They call the shared helpers and
+focus on domain logic.</p>
+<h2>The OSS Migration</h2>
+<p>Once the contracts were stable, three custom implementations were replaced with
+industry-standard libraries.</p>
+<h3>RAGAS — Evaluation</h3>
+<p>The custom eval harness scored generation quality with hand-written expected comparisons.
+RAGAS replaced the judge scoring while preserving the contract: the <code>eval_result</code> telemetry
+event shape stayed unchanged, the CI boundary (deterministic, zero judge calls) stayed
+intact, and the baseline comparison mechanism stayed in place.</p>
+<p>The gain: Faithfulness, AnswerRelevancy, and ContextPrecisionWithoutReference are now
+industry-standard, citable metrics. Running against a local Ollama endpoint means evaluation
+costs £0 in API calls.</p>
+<pre><code class="language-python"># Judge mode now delegates scoring to RAGAS
+from ragas.metrics.collections import (
+    AnswerRelevancy,
+    ContextPrecisionWithoutReference,
+    Faithfulness,
+)
+from ragas import SingleTurnSample
+
+sample = SingleTurnSample(
+    user_input=question,
+    response=answer,
+    retrieved_contexts=contexts,
+)
+score = await metric.single_turn_ascore(sample)
+</code></pre>
+<h3>pybreaker — Circuit Breaker</h3>
+<p>The custom circuit breaker implemented the open/half-open/closed state machine directly.
+<code>pybreaker</code> replaced the state machine; the wrapper preserved the telemetry contract —
+breaker state transitions are still observable via the standard event stream.</p>
+<h3>tenacity — Retry Logic</h3>
+<p>The manual backoff loop across 67 lines of custom retry handling became this:</p>
+<pre><code class="language-python">from tenacity import (
+    AsyncRetrying, retry_if_exception,
+    stop_after_attempt, wait_exponential,
+)
+
+async for attempt in AsyncRetrying(
+    stop=stop_after_attempt(max_retries + 1),
+    wait=wait_exponential(multiplier=backoff_base, max=backoff_max),
+    retry=retry_if_exception(_retryable_exc),
+    before_sleep=_before_sleep,
+    reraise=True,
+):
+    with attempt:
+        return await _attempt_once(attempt.retry_state.attempt_number)
+</code></pre>
+<p>The retry predicate (<code>_retryable_exc</code>) remains explicit — which exceptions are retryable is a
+domain decision, not a library default. Observability via <code>before_sleep</code> is preserved.</p>
+<h3>What was not migrated (and why)</h3>
+<p><strong>LLM Guard</strong> for guardrails: blocked. The upstream package declares
+<code>requires-python &lt;3.13</code>; this platform runs Python 3.13 in CI. The blocker is documented
+and monitored. The existing semantic guardrail tripwires remain in place.</p>
+<p><strong>NVIDIA NeMo Guardrails</strong>: evaluated and rejected. NeMo Guardrails is a conversation flow
+controller — it handles topic adherence and dialogue routing via a custom DSL (Colang). The
+platform's guardrail requirement is input/output scanning for PII and injection. These are
+different problems. NeMo would have solved the wrong one while introducing a new maintenance
+language.</p>
+<h2>What Stays Custom: The Integration Layer</h2>
+<p>After the OSS migrations, the remaining custom code is the integration layer — the glue that
+makes disparate OSS tools work together in a coherent, observable, reproducible pipeline.</p>
+<p>This is not boilerplate. It is the original contribution:</p>
+<ul>
+<li><strong>JSONL telemetry + content-safe hashing + <code>run_id</code> correlation</strong> — the contract surface
+  that makes cross-module debugging possible. Prompt text never appears in logs. Hashes and
+  character counts are sufficient to detect regressions without leaking document content.</li>
+<li><strong>Manifests + fingerprinting</strong> — portable, replayable lineage records. Given a <code>run_id</code>
+  and a manifest, you can reconstruct exactly what ran, against what data, with what
+  configuration.</li>
+<li><strong>Policy packs</strong> — domain-specific deny/redact patterns for guardrails. These are thin
+  YAML config; they will survive the LLM Guard migration because they express project
+  requirements, not library defaults.</li>
+<li><strong>Retrieval metrics (Hit@k, MRR, NDCG)</strong> — deterministic, zero-dependency, no judge model
+  required. Candidates for RAGAS migration when retrieval metric support matures.</li>
+<li><strong>Retention and drift reporting</strong> — specific to the JSONL output stream and directory
+  layout. No general-purpose equivalent exists offline.</li>
+</ul>
+<p>A reader of the publications cannot find this integration layer in any single library. It is
+the assembly — and assembly is where the architectural decisions live.</p>
+<h2>The CI Gate: Deterministic Evaluation, Zero LLM Calls</h2>
+<p>The eval harness supports two dispatch modes:</p>
+<ul>
+<li><strong>CI mode</strong> — expected-based comparison; zero judge or LLM calls</li>
+<li><strong>Local</strong> — RAGAS judge scoring via Ollama on localhost; £0 API cost</li>
+</ul>
+<p>The CI boundary is enforced in code: if generation metrics are requested in CI mode without
+an <code>expected</code> value, the harness raises a <code>ValueError</code> before any LLM call is attempted.</p>
+<pre><code class="language-python"># CI gate: generation metrics require expected; never call a judge in CI
+def test_ci_mode_requires_expected_for_generation_metrics():
+    case = EvalCase(case_id=&quot;c1&quot;, question=&quot;q&quot;, answer=&quot;a&quot;,
+                    contexts=[&quot;ctx&quot;], expected=None)
+    with pytest.raises(ValueError):
+        run_eval_case(eval_id=&quot;e1&quot;, case=case, metrics=[&quot;faithfulness&quot;],
+                      judge=None, require_expected=True)
+</code></pre>
+<p>This test does not depend on an LLM. It verifies that the CI boundary is enforced by the
+harness itself, not by a CI environment variable or an external flag. 114 tests pass in
+this configuration — zero judge calls, deterministic results.</p>
+<p>Objective retrieval metrics (Hit@k, MRR, NDCG) run in the same CI mode. A case provides
+<code>retrieved_ids</code> and <code>relevant_ids</code>; the metric calculation is pure maths.</p>
+<h2>Content-Safe Telemetry: Observability Without Data Leakage</h2>
+<p>The telemetry design deserves its own callout for sensitive-data environments.</p>
+<p>Every LLM call event records <code>prompt_chars</code>, <code>prompt_hash</code>, <code>output_chars</code>, <code>output_hash</code>
+— not the raw prompt or output text. Every embedding event does the same for its input.</p>
+<p>A representative <code>llm_call</code> event:</p>
+<pre><code class="language-json">{
+  &quot;event_type&quot;: &quot;llm_call&quot;,
+  &quot;run_id&quot;: &quot;3f8a...&quot;,
+  &quot;module&quot;: &quot;retriever&quot;,
+  &quot;prompt_chars&quot;: 4823,
+  &quot;prompt_hash&quot;: &quot;a7c3...&quot;,
+  &quot;output_chars&quot;: 342,
+  &quot;output_hash&quot;: &quot;b12f...&quot;,
+  &quot;prompt_tokens_est&quot;: 1205,
+  &quot;output_tokens_est&quot;: 85,
+  &quot;cost_gbp_est&quot;: 0.0,
+  &quot;duration_ms&quot;: 4821
+}
+</code></pre>
+<p><code>cost_gbp_est</code> is 0.0 for local inference — there is no billing. The field exists so the
+same telemetry schema works when a module moves to a cloud provider: switching the pricing
+config produces real cost estimates without changing the event shape.</p>
+<p>[NEEDS_DATA: replace the example above with a sanitised <code>llm_call</code> event from a real run
+using <code>ELT_LLM_TELEMETRY_SINK=jsonl</code> — the schema shape is correct; the values should come
+from an actual run to confirm the field names and formatting in the published article.]</p>
+<h2>The Lesson: The Decision Gate</h2>
+<p>Every OSS migration in this project was preceded by the same question: "Is there a library
+that solves this?"</p>
+<p>For a retry loop, the answer is yes — tenacity. For a circuit breaker state machine, yes
+— pybreaker. For RAG evaluation metrics, yes — RAGAS. For PII/injection scanning, yes — LLM
+Guard (blocked on Python 3.13, but the choice is made and the migration is queued).</p>
+<p>For the integration layer — run correlation, content-safe telemetry schema, lineage
+manifests, policy packs — the answer is no. Those are project-specific contracts. They
+remain custom because there is a reason for them to be custom.</p>
+<p>The decision gate:</p>
+<blockquote>
+<p>Every line of custom code is a decision to diverge from what already exists. That decision
+needs a reason. "It's faster to write it myself" is not a reason — it is the bias this
+principle exists to correct.</p>
+</blockquote>
+<p>The practical effect of applying this gate: the publications become about the integration
+decisions, not the commodity code. Using RAGAS, pybreaker, and tenacity signals to readers
+that the author surveyed the field and chose deliberately. Building a retry loop from scratch
+signals the opposite.</p>
+<h2>What Every Module Inherits</h2>
+<p>In this platform, the ingest/query/retrieval/graph/agent modules all consume the same core package. None of them define their own telemetry sink, model factory, or config schema. They inherit the 13 primitives and focus on domain logic.</p>
+<p>The result: a platform where every module is operable on the same terms. Run correlation
+works across all of them. Telemetry events share the same schema. Manifests are written to
+the same output root. Cost guardrails apply uniformly. When a regression appears, the chain
+is traceable end-to-end regardless of which module introduced it.</p>
+<h2>Limits / When Not to Use</h2>
+<ul>
+<li>Telemetry records hashes and character counts, not raw content. If you need input/output
+  text for debugging, that is a separate trace mechanism outside this layer.</li>
+<li>Token and cost estimates are derived from character counts — reliable proxies, not
+  billing-accurate figures.</li>
+<li>Budget guardrails block at the call level — they do not provide backpressure or queuing.
+  A pipeline that hits a budget cap stops, not slows.</li>
+<li>LLM Guard migration is blocked on Python 3.13 upstream compatibility. The existing
+  guardrail tripwires handle common patterns; NLP-based PII scanning is pending.</li>
+<li>The retrieval gold set is currently a smoke test placeholder — meaningful CI gating on
+  retrieval quality requires domain questions with verified relevant IDs from the live index.</li>
+</ul>
+<h2>Repro Notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro, 18GB RAM; <code>ELT_LLM_TELEMETRY_SINK=jsonl</code> enabled;
+  all inference via Ollama <code>localhost:11434</code>; Python 3.13 with UV workspace</li>
+<li>Dataset class: enterprise governance corpus (internal documents; not reproducible from
+  this article)</li>
+<li>Test count: 114 tests passing at time of writing; deterministic CI gate with zero LLM
+  calls</li>
+<li>RAGAS version: current stable; judge metrics point at Ollama-hosted model via the
+  OpenAI-compatible <code>/v1</code> endpoint — no cloud API calls</li>
+<li>What is not reproducible from this article: domain-specific config values, prompt schemas,
+  internal workload profiles</li>
+</ul>
+
+</body>
+</html>

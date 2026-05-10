@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>From Dataset to Stakeholder Pack: A Strict Vega-Lite Workflow That Repairs Itself</h1>
+<p><strong>Series:</strong> LLM-Driven Data Visualisation — Part 7 of 7</p>
+<p>Executives don’t want charts. They want a pack. The pack must be repeatable, explainable, and fast to regenerate. This is how the pipeline outputs a complete Vega-Lite analyst pack directly from config.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>A stakeholder pack is an output product: multiple charts, narratives, and an audit trail, regenerated from config.</li>
+<li>Strict validation is the trust boundary: bad column references and invalid specs fail before any artefact is written.</li>
+<li>Repairs are targeted: fix only the failed Vega-Lite spec using the schema error, without rewriting the analysis plan.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+</ul>
+<p>There is a quiet but important distinction in AI charting:</p>
+<ul>
+<li>A demo system produces a chart once.</li>
+<li>A production system produces a chart pack repeatedly, with traceability, validation, and bounded failure modes.</li>
+</ul>
+<p>This article documents the complete workflow in the platform’s visualisation module (called <code>elt_llm_visualise</code> in this codebase): a config-driven pipeline that asks an LLM to propose an analyst pack, validates every spec deterministically, and repairs only what fails — leaving the rest of the plan intact.</p>
+<p>The design goal is publication and stakeholder use. A silent wrong chart is worse than a loud correct failure.</p>
+<h2>The problem: LLM charting breaks in predictable ways</h2>
+<p>Modern models describe datasets well. The failure modes when generating charts are also predictable:</p>
+<ul>
+<li>Plotting libraries require imperative code that is hard to generalise across datasets</li>
+<li>LLMs hallucinate field names — they "remember" that datasets like yours often have a <code>season</code> column, a <code>month_name</code> derived field, or a <code>percentage</code> pre-computed field, and they propose charts based on that memory rather than the actual schema</li>
+<li>The easiest patch for a chart failure is to silently modify the output — which can change what the chart means</li>
+</ul>
+<p>The pipeline is designed around the inverse: fail loudly on invalid specs, repair only what failed, and produce an audit trail for every run.</p>
+<h2>The architecture: the LLM proposes, the runtime proves</h2>
+<p>The central design decision is the trust boundary:</p>
+<ul>
+<li><strong>The LLM proposes:</strong> analytical hypotheses, chart specs, transformation logic, insight narrative</li>
+<li><strong>The runtime proves:</strong> that column references are valid, transformations are coherent, and Vega-Lite specs conform to the v5 schema before any HTML is written</li>
+</ul>
+<p>This separation is what makes the pipeline scale. The LLM is powerful at analytical framing. The runtime is deterministic at execution. Neither crosses into the other's domain.</p>
+<h2>End-to-end: from config to stakeholder report</h2>
+<h3>1) Define the dataset and the question in YAML</h3>
+<p>You provide the dataset (local file or URL), the analytical question (prompt), and rendering preferences. You do not specify chart types.</p>
+<pre><code class="language-yaml">mode: infer_visualisations
+
+dataset:
+  path: &quot;https://cdn.jsdelivr.net/npm/vega-datasets/data/iris.json&quot;
+  format: &quot;json&quot;
+
+inference:
+  top_k: 5
+  enable_self_critique: true
+  prompt: &quot;Create a publication-quality analysis pack explaining how iris species differ across measurements.&quot;
+  context: |
+    Canonical dataset for visualisation development.
+    Focus on species comparisons and relationships between numeric measures.
+
+output:
+  renderer: &quot;vega_lite&quot;
+  renderer_options:
+    strict: true
+</code></pre>
+<h3>2) The runtime summarises the dataset without sending raw rows</h3>
+<p>The pipeline reads the dataset and produces a compact statistical profile: column types, cardinalities, null rates, top values, distribution statistics, date ranges. This summary is the LLM's input. Individual rows are never sent to the model.</p>
+<p>For a dataset the size of iris (150 rows, 5 columns), this step completes in milliseconds.</p>
+<h3>3) Goal Exploration: the LLM commits to analytical intent</h3>
+<p>Before proposing any charts, the model generates 3-5 analytical hypotheses — specific questions the dataset could answer and relationships worth investigating. These hypotheses constrain the chart planning: every chart must address a stated hypothesis.</p>
+<p>This step is what prevents the model from generating plausible-but-generic charts. It must articulate what it is trying to prove before it is allowed to propose evidence.</p>
+<h3>4) Prompt guardrails constrain what the model can propose</h3>
+<p>Two guardrails are active during chart planning:</p>
+<p><strong>A curated "recipe card"</strong> — a short set of Vega-Lite schema rules and example patterns that the model must follow. Optimised for the most common failure points: stacking, mark types, encoding types, and field references. Stored as configuration, not hardcoded.</p>
+<p><strong>A transformation-aware field rule</strong> — if the runtime aggregates the data (group-by + aggregate), the model can only reference post-transform column names in the Vega-Lite spec. Pre-transform columns are out of scope after aggregation. This eliminates a large class of specs that look correct but fail at render time.</p>
+<h3>5) Deterministic transformation execution</h3>
+<p>The plan's transformation block is executed in Pandas with strict validation:</p>
+<ul>
+<li><code>group_by</code> columns must exist in the dataset</li>
+<li><code>value_column</code> must be numeric for aggregate operations (sum, mean, std, etc.)</li>
+<li><code>filter</code> expressions must be parseable and valid</li>
+<li><code>top_n</code> produces an automatic "Other" bucket for single-dimension groupings, preserving total values</li>
+</ul>
+<p>This is where credibility is established: it is no longer "the model said so" — it is "the data supports it, computed deterministically."</p>
+<h3>6) Vega-Lite validation in strict mode</h3>
+<p>Every chart spec passes through the Vega-Lite v5 schema validator before rendering. Strict mode applies two rules:</p>
+<ul>
+<li><strong>Schema-safe fixes are allowed:</strong> unwrapping invalid shapes (for example, <code>{"stack": {"value": "normalise"}}</code> → <code>"normalise"</code>) where the intent is unambiguous</li>
+<li><strong>Semantic rewrites are blocked:</strong> if a chart cannot be rendered without changing what it means, it fails loudly rather than being silently modified</li>
+</ul>
+<p>A spec that invents a column name fails at transformation validation (step 5). A spec with invalid Vega-Lite syntax fails at schema validation (step 6). Neither reaches the renderer.</p>
+<h3>7) Targeted repair for renderer failures</h3>
+<p>When a chart spec fails schema validation, the runtime triggers a single targeted repair: it sends the failed spec and the schema error back to the LLM and asks for a corrected <code>vega_lite_spec</code> only. The insight statement, narrative, and transformation plan remain unchanged.</p>
+<p>This is a deliberate design choice:
+- <strong>Minimises drift</strong> — the analytical content (what the chart is saying) does not change during repair; only the rendering definition is corrected
+- <strong>Bounds retries</strong> — one repair attempt per chart, not an open-ended retry loop
+- <strong>Converts schema errors into structured repair prompts</strong> — the LLM receives an exact error message, not a vague "please fix this"</p>
+<h3>8) Shareable output artefacts</h3>
+<p>A complete run produces:</p>
+<p><strong>Artefact — Purpose</strong></p>
+<ul>
+<li><strong>Per-chart HTML files</strong> — Self-contained charts for embedding or individual review</li>
+<li><strong><code>index.html</code></strong> — Navigation index for the full pack</li>
+<li><strong><code>report.html</code></strong> — Combined analyst pack: charts + insight statements + narratives + recommended actions</li>
+<li><strong><code>run_manifest.json</code></strong> — Audit trail: run ID, config fingerprint, dataset fingerprint, model, LLM call counts, output file list, timestamps</li>
+</ul>
+<p><code>report.html</code> is designed for direct stakeholder use — no dependencies, no build step, open in a browser.</p>
+<p>To disable self-critique for faster iteration: set <code>enable_self_critique: false</code> in the config. To use Plotly instead of Vega-Lite: change <code>output.renderer</code> to <code>plotly</code> (covers chart types like treemap and sankey, which Vega-Lite strict mode does not yet support).</p>
+<h2>Why this approach is better than code generation</h2>
+<p><strong>Concern — Code generation — This pipeline</strong></p>
+<ul>
+<li><strong>Validation before execution</strong> — Not possible without running the code — Full schema validation before rendering</li>
+<li><strong>Failure mode</strong> — Python exception at runtime — Structured error at validation, before any chart renders</li>
+<li><strong>Silent semantic modification</strong> — Common (patch the output) — Blocked in strict mode</li>
+<li><strong>Reproducibility</strong> — Depends on model state and random seed — Config fingerprint + dataset fingerprint in manifest</li>
+<li><strong>Repair scope</strong> — Re-run the whole chart — Repair only the failed spec; insight and transformation preserved</li>
+</ul>
+<h2>The broader lesson</h2>
+<p>The future of AI visualisation is not a model that guesses chart code and hopes the execution works.</p>
+<p>It is a governed workflow: the model proposes a plan, the runtime executes deterministically, the schema validator checks the output before it ships, and failures trigger targeted repair rather than silent mutation.</p>
+<p>That is what turns an AI charting demo into a pipeline you can trust to produce stakeholder reports reliably.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>Packs optimise for repeatability; they are not ideal for exploratory, iterative notebook-style work.</li>
+<li>Narrative quality depends on the evidence available; without reliable summaries and citations, packs become decorative.</li>
+<li>Publishing requires public-safe datasets for screenshots and outputs; do not leak client context.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; <code>inference.top_k=5</code>; <code>enable_self_critique=true</code>; pack output writes manifest + index + per-chart Vega-Lite specs; renderer <code>strict=true</code></li>
+<li>Dataset class: Seattle weather (public Vega dataset; CSV)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+
+</body>
+</html>

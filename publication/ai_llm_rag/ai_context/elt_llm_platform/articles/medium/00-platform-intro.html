@@ -51,16 +51,14 @@ rejectable by a quality gate.</p>
 The moment you have to swap corpora, adjust retrieval breadth, change a reranking pool, tighten a quality gate, or bound an agentic loop, you want those decisions to be explicit and reviewable.
 In this platform, those decisions live in configuration as a small set of named profiles and overrides.</p>
 <h2>The Shape of the System</h2>
-<p>Most “RAG platform” write-ups jump straight to prompts. This one starts with the system shape: separate responsibilities, stable outputs, and a clear build chain.</p>
-<pre><code>Core primitives
-  └─ Ingestion + query layer
-       └─ Retrieval + relationship layer
-            └─ Orchestrator
-                 ├─ MCP server (developer + assistant tools)
-                 └─ HTTP agent (business-user surface)
-
-Optional API/UI surface (built on the same query layer)
-</code></pre>
+<p>Most “RAG platform” write-ups jump straight to prompts. This one starts with the system shape: separate responsibilities, stable outputs, and a clear build chain. Four layers, each building on the one beneath it:</p>
+<ul>
+<li><strong>Core primitives</strong> — shared models, data contracts, configuration</li>
+<li><strong>Ingestion + query layer</strong> — document processing and hybrid retrieval</li>
+<li><strong>Retrieval + relationship layer</strong> — quality-gated agentic fallback and knowledge graph</li>
+<li><strong>Orchestrator</strong> — routes queries across all layers; surfaces as an MCP server (developer and assistant tools) and an HTTP agent (business-user surface)</li>
+</ul>
+<p>An optional API/UI surface sits alongside, built on the same query layer without rewriting the orchestration.</p>
 <p>This gives you two properties most demos never have:</p>
 <ul>
 <li>You can run long batch pipelines as jobs, resume them, and get deterministic artefacts out the other side.</li>
@@ -70,21 +68,9 @@ Optional API/UI surface (built on the same query layer)
 <p>If you take nothing else from this article, take this. Most AI systems are unreliable because they ask the model to do everything.</p>
 <p><strong>Need — Preferred approach — Why</strong></p>
 <ul>
-<li>Exact lookups, joins, schema-driven extraction<ul>
-<li>Deterministic artefacts (structured JSON)</li>
-<li>Precise, low-cost, auditable</li>
-</ul>
-</li>
-<li>Finding relevant evidence in unstructured sources<ul>
-<li>Retrieval substrate (BM25 + vectors)</li>
-<li>Best balance of exact and semantic recall</li>
-</ul>
-</li>
-<li>Turning evidence into a usable answer<ul>
-<li>LLM synthesis over retrieved context</li>
-<li>Human-readable output, grounded in cited evidence</li>
-</ul>
-</li>
+<li><strong>Exact lookups, joins, schema-driven extraction</strong> — Deterministic artefacts (structured JSON) — Precise, low-cost, auditable</li>
+<li><strong>Finding relevant evidence in unstructured sources</strong> — Retrieval substrate (BM25 + vectors) — Best balance of exact and semantic recall</li>
+<li><strong>Turning evidence into a usable answer</strong> — LLM synthesis over retrieved context — Human-readable output, grounded in cited evidence</li>
 </ul>
 <p>Once you enforce that boundary, a lot of other engineering decisions become obvious.</p>
 <h2>What the Platform Does</h2>
@@ -115,26 +101,10 @@ The same underlying knowledge exposed through a developer/assistant surface and 
 <p>Here are four failure modes that show up quickly in real environments, and the platform discipline that prevents each one:</p>
 <p><strong>Failure mode — What it looks like — Platform discipline that prevents it</strong></p>
 <ul>
-<li>Silent coverage gaps<ul>
-<li>The system answers confidently, but the relevant evidence was never retrieved</li>
-<li>Treat coverage as a first-class concern (deep dive in Article 2)</li>
-</ul>
-</li>
-<li>Plausible boilerplate<ul>
-<li>The answer reads well but contains no real content</li>
-<li>Require outputs to pass an explicit quality bar (deep dive in Article 3)</li>
-</ul>
-</li>
-<li>Unbounded loops<ul>
-<li>“Autonomy” becomes cost and latency runaway</li>
-<li>Enforce bounded execution: budgets, timeouts, and stop conditions</li>
-</ul>
-</li>
-<li>One-off runs<ul>
-<li>The demo works once, then nobody can reproduce it</li>
-<li>Build like a data pipeline: repeatable runs and durable artefacts</li>
-</ul>
-</li>
+<li><strong>Silent coverage gaps</strong> — The system answers confidently, but the relevant evidence was never retrieved — Treat coverage as a first-class concern (deep dive in Article 2)</li>
+<li><strong>Plausible boilerplate</strong> — The answer reads well but contains no real content — Require outputs to pass an explicit quality bar (deep dive in Article 3)</li>
+<li><strong>Unbounded loops</strong> — “Autonomy” becomes cost and latency runaway — Enforce bounded execution: budgets, timeouts, and stop conditions</li>
+<li><strong>One-off runs</strong> — The demo works once, then nobody can reproduce it — Build like a data pipeline: repeatable runs and durable artefacts</li>
 </ul>
 <p>This article keeps those principles at the level of system design. If you want the deep dives, each component also has its own write-up.</p>
 <h2>What Makes This Production-Grade (Not Just “RAG”)</h2>

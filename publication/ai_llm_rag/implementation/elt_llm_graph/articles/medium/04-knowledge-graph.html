@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Building a Knowledge Graph from Unstructured Governance Documents</h1>
+<p>Here is what a failed relationship query looks like in a RAG-only system:</p>
+<blockquote>
+<p>"This is an important concept in enterprise governance. It relates to the organisation's operational framework and compliance requirements."</p>
+</blockquote>
+<p>Technically fluent. Zero relationship content. No chain. No edges. If you need “what governs what?”, this failure mode is structural.</p>
+<p>RAG is bad at relationships. If the analytical question is a path rather than a fact, synthesis is the wrong substrate. This is how to assemble a typed knowledge graph from audited catalogs to answer relationship queries deterministically.</p>
+<p>If your question is “what governs what?”, “what is upstream of X?”, or “show me the chain from A to B”, a
+synthesis model is doing the wrong job. You need traversal semantics, not more prompt engineering.</p>
+<p>This article explains how a typed knowledge graph sits on top of structured catalogs, and why it becomes the
+most reliable way to answer relationship questions once you have crossed a certain scale.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>RAG answers "what is X?" — it cannot reliably answer "what governs X?" because the answer is a graph shape, not a paragraph.</li>
+<li>A typed graph assembled deterministically from audited catalogs gives you traversal queries in milliseconds with zero LLM variance.</li>
+<li>The LLM's role changes: it explains what the graph returned, rather than generating the relationships itself.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+</ul>
+<h2>Why relationship questions don’t fit search</h2>
+<p>The naive approach is to treat relationship questions as normal queries:</p>
+<ol>
+<li>retrieve the most relevant chunks</li>
+<li>ask an LLM to assemble an answer</li>
+<li>hope the sources cover the full chain</li>
+</ol>
+<p>That works for “what is X?” It fails for “how does X relate to Y?” because the answer is not a paragraph in any
+single place. It is a graph shape across multiple sources.</p>
+<p>Two things go wrong:</p>
+<ul>
+<li><strong>Lost edges:</strong> the relationship is present, but split across sources and never retrieved together</li>
+<li><strong>Invented edges:</strong> the LLM “fills in” a plausible chain when the evidence is incomplete</li>
+</ul>
+<p>If the question is inherently relational, the solution is not “retrieve harder”. It is to represent the
+relationships explicitly.</p>
+<h2>What most teams try first: Keep Pushing RAG Harder</h2>
+<p>When teams first notice relational queries failing, they usually try one of:</p>
+<ul>
+<li>increase <code>top_k</code> and hope the missing edge appears</li>
+<li>add a reranker and hope the chain becomes coherent</li>
+<li>add follow-up prompting (“check your answer”, “cite sources”)</li>
+</ul>
+<p>These help at the margins. They do not change the underlying problem: you are asking a synthesis model to do
+graph traversal implicitly.</p>
+<p>The turning point is realising that relationship queries should be answered by a different substrate entirely.</p>
+<h2>How the solution works: A Typed Graph Built from Deterministic Artefacts</h2>
+<p>The platform already produces structured outputs:</p>
+<ul>
+<li>a catalog of entities, with fields and relationships</li>
+<li>a catalog of candidate terms and gaps</li>
+<li>reference lists that behave like deterministic lookup tables</li>
+</ul>
+<p>Those are not “just outputs”. They are stable, auditable inputs for a graph build step.</p>
+<p>So the design decision is:</p>
+<ol>
+<li>Treat catalogs as the source of truth</li>
+<li>Build a directed graph where nodes are typed (entity / reference_value / stub)</li>
+<li>Preserve relationship edge types from the catalogs</li>
+<li>Export the graph in formats that can be queried and visualised</li>
+</ol>
+<p>This is deliberately not “AI-driven graph extraction”. AI has already done its work upstream in controlled,
+quality-gated steps. The graph is deterministic assembly.</p>
+<h2>What the Graph Looks Like</h2>
+<p>At runtime, the graph build step runs four stages in sequence:</p>
+<ol>
+<li>Load three structured catalog inputs</li>
+<li>Pass through the Graph Loader</li>
+<li>Construct a NetworkX DiGraph with typed nodes</li>
+<li>Export to GraphML, Cypher, and D3 JSON</li>
+</ol>
+<p><strong>Why typed nodes matter:</strong></p>
+<ul>
+<li><strong>entity</strong> nodes are the stable things you want to query — ~625 nodes sourced from entity catalogs</li>
+<li><strong>reference_value</strong> nodes capture controlled vocabularies and enumerations — 53 nodes from a dedicated reference data catalog</li>
+<li><strong>stub</strong> nodes preserve graph connectivity when a relationship mentions a name that is not present elsewhere — ~216 nodes</li>
+</ul>
+<p>Stub nodes deserve specific explanation. When the extraction pipeline finds "A governs B" in handbook text, both A and B become nodes. If B is not in any catalog — perhaps a term referenced in governance rules but not formally catalogued — it is added as a lightweight stub. The edge is preserved. The graph stays connected. Without stubs, those edges would be silently dropped and the graph would have holes that make governance chain queries unreliable.</p>
+<p>Without those types, a graph quickly becomes a bag of strings. With them, you can filter, traverse, and export with predictable semantics.</p>
+<p><strong>Export formats:</strong></p>
+<p><strong>Format — File — Use</strong></p>
+<ul>
+<li><strong>GraphML</strong> — <code>knowledge_graph.graphml</code> — Graph exchange standard; input to all query functions</li>
+<li><strong>Cypher</strong> — <code>knowledge_graph.cypher</code> — Neo4j / Kuzu import for persistent graph databases</li>
+<li><strong>D3 JSON</strong> — <code>knowledge_graph_d3.json</code> — Browser force-directed visualisation</li>
+</ul>
+<p>The graph is built once per catalog version and reused. All query surfaces — MCP tools, agent tools, ad hoc scripts — load the same GraphML artefact.</p>
+<h2>Result: Traversal Becomes a First-Class Query</h2>
+<p>Once the graph exists, relationship questions become deterministic operations:</p>
+<p><strong>Query — Method — What it returns</strong></p>
+<ul>
+<li><strong>“What governs X?”</strong> — <code>get_governance_chain(“X”)</code> — Directed chain of <code>governed_by</code> edges to root — stops on cycles</li>
+<li><strong>“What is connected to X?”</strong> — <code>get_neighbours(“X”, hops=2)</code> — BFS up to N hops; optional <code>rel_type</code> filter</li>
+<li><strong>“How is A related to B?”</strong> — <code>get_all_paths(“A”, “B”)</code> — All simple paths up to depth 6, capped at 10</li>
+<li><strong>“What entities are in domain D?”</strong> — <code>find_entities_in_domain(“D”)</code> — Filter nodes by domain attribute</li>
+<li><strong>“What are all entities of type T?”</strong> — <code>find_by_category(“T”)</code> — Filter by <code>entity_category</code> (role, process, document…)</li>
+</ul>
+<p>All lookups are case-insensitive. Results are milliseconds — no LLM call, no embedding, no synthesis.</p>
+<p>This changes the product surface. You are no longer asking a model to “explain relationships”. You are asking
+a graph to return relationships, then optionally asking a model to explain what the graph returned.</p>
+<p><strong>Example run scale:</strong> 894 nodes, 772 edges (run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; corpus: internal governance handbook + enterprise architecture model).</p>
+<h2>Architecture Decisions Summary</h2>
+<p><strong>Decision — Alternative Considered — Why This</strong></p>
+<ul>
+<li><strong>Deterministic graph assembly from audited catalogs</strong> — LLM-driven graph extraction at query time — AI already ran upstream in quality-gated steps; graph is the output of that work, not a new inference pass</li>
+<li><strong>Typed nodes (entity / reference_value / stub)</strong> — Untyped bag of strings — Types enable filtering, traversal semantics, and predictable query results</li>
+<li><strong>Stub nodes for missing entities</strong> — Drop unresolvable relationship endpoints — Dropping edges silently breaks governance chains; stubs preserve connectivity and make gaps visible</li>
+<li><strong>NetworkX in-memory DiGraph</strong> — Persistent graph database (Neo4j) — Sufficient for thousands of nodes; no infrastructure dependency; GraphML serialises to disk for replay</li>
+<li><strong>GraphML as the canonical export</strong> — Cypher or JSON as primary — GraphML is the stable interchange format; Cypher/D3 are derived exports for specific consumers</li>
+<li><strong>Config-driven edge type filter</strong> — Hardcoded relationship set — Allows whitelisting specific edge types without touching code</li>
+<li><strong>Config-driven exclusion of low-confidence nodes</strong> — Include all — Keeps the traversable graph clean; <code>LIKELY_FALSE_POSITIVE</code> stubs don't pollute governance chains</li>
+</ul>
+<h2>What Generalises (The Lesson)</h2>
+<p>The transferable lesson is simple:</p>
+<ul>
+<li>Use RAG when the answer is text.</li>
+<li>Use graphs when the answer is relationships.</li>
+</ul>
+<p>The mistake is trying to make one substrate do both jobs.</p>
+<p>If you already have structured outputs (catalogs, extracted entities, relationship fields), the fastest path to
+relational reliability is to assemble a graph deterministically. The LLM becomes an explainer of what the graph
+returned, not the generator of the relationships themselves.</p>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; deterministic graph assembly from audited catalogs; exports GraphML / Cypher / D3 JSON</li>
+<li>Dataset class: internal governance handbook + enterprise architecture model (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>The graph is only as complete as the upstream extraction. Missing relationships upstream mean missing edges.</li>
+<li>An in-memory graph is excellent at thousands of nodes. At larger scales, you likely want a dedicated graph
+  store, but the pattern stays the same: deterministic assembly from audited inputs.</li>
+</ul>
+
+</body>
+</html>
