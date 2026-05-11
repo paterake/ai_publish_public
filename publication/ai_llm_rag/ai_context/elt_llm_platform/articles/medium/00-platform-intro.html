@@ -72,6 +72,7 @@ In this platform, those decisions live in configuration as a small set of named 
 <li><strong>Finding relevant evidence in unstructured sources</strong> — Retrieval substrate (BM25 + vectors) — Best balance of exact and semantic recall</li>
 <li><strong>Turning evidence into a usable answer</strong> — LLM synthesis over retrieved context — Human-readable output, grounded in cited evidence</li>
 </ul>
+<p>The model handles synthesis — what only a language model can do. Deterministic systems handle precision. Retrieval handles coverage. The boundary means the model is not doing everything; it is doing the one thing it is actually suited for.</p>
 <p>Once you enforce that boundary, a lot of other engineering decisions become obvious.</p>
 <h2>What the Platform Does</h2>
 <p>Five components, each designed as an engineering surface you can reason about and operate.</p>

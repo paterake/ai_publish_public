@@ -30,7 +30,7 @@ AI failing slow is decay.</p>
 <p>Failing slow looks like “mostly fine”:</p>
 <ul>
 <li>a refactor updates code but not the docs</li>
-<li>a constraint is quietly softened (“it usually works” becomes “it should work”)</li>
+<li>a constraint is quietly softened (“it should work” becomes “it usually works”)</li>
 <li>a rule becomes a suggestion because it wasn’t enforced</li>
 <li>a checklist item disappears because “it felt redundant”</li>
 <li>the definition of “done” slowly changes across sessions</li>
@@ -63,7 +63,8 @@ AI failing slow is decay.</p>
 <h2>A Real Pattern Behind the Drift</h2>
 <p>In our own work, the cost of failing slow was not a broken build.</p>
 <p>It was a multi-day refactor to recover lost clarity in our own controls: a set of code review and governance rules had grown, drifted, and become internally inconsistent across multiple sessions. There was no single commit to blame. There was just the gradual accumulation of “reasonable” edits that made the whole thing harder to trust.</p>
-<p>That’s what failing slow looks like: you don’t notice until the repair is expensive.</p>
+<p>The code was recoverable. The confidence in the system — that it meant what it said — was not something you could restore with a commit. You had to earn it back.</p>
+<p>That’s what failing slow looks like: you don’t notice until the repair is already compounding.</p>
 <h2>The Lesson: You’re Building a Collaboration System, Not a Prompt</h2>
 <p>If you want to use AI assistants in long-lived repositories, treat the assistant as stateless by default and build a system that stays stateful:</p>
 <ul>
@@ -75,7 +76,7 @@ AI failing slow is decay.</p>
 <p>This is not about making the model smarter.</p>
 <p>It is about making the system resilient to non-determinism, partial context, and time.</p>
 <p>Because the real risk isn’t that AI will fail once.</p>
-<p>The real risk is that it will fail slowly, and you won’t notice until you can’t recover the confidence you lost.</p>
+<p>The real risk is that it will fail slowly, and you won’t notice until the confidence you lost is already compounding against you.</p>
 
 </body>
 </html>
