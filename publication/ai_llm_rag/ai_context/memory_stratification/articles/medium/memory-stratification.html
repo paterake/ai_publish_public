@@ -24,9 +24,9 @@
 <ul>
 <li><strong>Ephemeral</strong> — in-flight blockers, active run IDs, decisions still being evaluated. Ends with the session. Readable by one assistant only.</li>
 <li><strong>Assistant-local</strong> — tool-specific preferences saved by one vendor. Vendor/tool-local; retention varies by product; not repo-backed. Readable by one assistant only.</li>
-<li><strong>Governing artifacts</strong> — project rules, operating constraints, and workflow definitions stored in the repo. Git-backed. Readable by any assistant.</li>
+<li><strong>Governing artefacts</strong> — project rules, operating constraints, and workflow definitions stored in the repo. Git-backed. Readable by any assistant.</li>
 </ul>
-<p>The governing artifacts layer is the primary deliverable of AI-assisted workflows: structured human knowledge that cannot be regenerated without human effort — encoded constraints, decisions, and process definitions from which code is derived. Code is cheap to regenerate; these artifacts are not.</p>
+<p>The governing artefacts layer is the primary deliverable of AI-assisted workflows: structured human knowledge that cannot be regenerated without human effort — encoded constraints, decisions, and process definitions from which code is derived. Code is cheap to regenerate; these artefacts are not.</p>
 <p>The mistake is putting stable rules in assistant-local memory.</p>
 <p>Assistant-local memory feels “permanent” because it survives across sessions. But it is vendor/tool-local: no other assistant can read it. Retention varies by product — some vendors now cloud-sync this layer — but portability does not. And the backup policy is vendor-controlled, not yours: a product change or tier change can alter it without warning.</p>
 <p>If you are building a system that relies on stable rules, those rules need to live somewhere durable and universal: the repository.</p>
