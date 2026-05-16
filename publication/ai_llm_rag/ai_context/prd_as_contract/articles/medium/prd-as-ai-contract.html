@@ -31,7 +31,7 @@
 <p>you wrote something that can work for a human team, because humans understand what those instructions are <em>really trying to achieve</em>.</p>
 <p>For an AI assistant, those instructions are a trap.</p>
 <p>They anchor the assistant on artefacts (files, classes) instead of outcomes (contracts, invariants). The assistant optimises for producing the named artefacts, and the system drifts away from the real requirement.</p>
-<p>The deeper problem is that file-centric PRDs silently couple the specification to the current implementation. That coupling is exactly what makes refactors dangerous: the spec changes when the code changes.</p>
+<p>The coupling is the problem — and it is silent in the way that matters: teams writing "update file Y" don’t notice they’ve written a spec that breaks the moment the file is renamed or restructured. The specification has been tied to the implementation, invisibly, and no one realises it until a refactor makes the PRD wrong.</p>
 <p>Contracts shouldn’t do that.</p>
 <h2>What an AI-ready PRD must enable</h2>
 <p>Here is the standard I hold PRDs to when an assistant is involved:</p>
@@ -100,7 +100,7 @@
 <p>An AI coding assistant doesn’t make requirements less important.</p>
 <p>It makes weak requirements visible.</p>
 <p>If your PRD is a brief, the assistant will treat it as a brief. If your PRD is a contract, the assistant has something stable to build against, refactor against, and be held accountable to.</p>
-<p>There is a deeper reason why this matters now more than before. In traditional development, code was the primary artifact — the PRD described what the code should do, but the code was what shipped. In AI-assisted development, this inverts: code is generated on demand from direction. The PRD is the primary artifact. It is the thing that cannot be regenerated without human effort — the encoded intent, the stated constraint, the invariant that must hold regardless of how the implementation is rewritten. Code is the by-product.</p>
+<p>There is a deeper reason why this matters now more than before. In traditional development, code was the primary artefact — the PRD described what the code should do, but the code was what shipped. In AI-assisted development, this inverts: code is generated on demand from direction. The PRD is the primary artefact. It is the thing that cannot be regenerated without human effort — the encoded intent, the stated constraint, the invariant that must hold regardless of how the implementation is rewritten. Code is the by-product.</p>
 <p>Write the PRD accordingly: as the thing that outlasts any implementation, not as a description of the one you currently have.</p>
 
 </body>

@@ -47,6 +47,15 @@
 <li>the assistant has an unambiguous signal that “done” is not true yet</li>
 <li>the human doesn’t need to police every rule manually</li>
 </ul>
+<h2>Evidence-Led Governance: Don’t Review Opinions, Review Artefacts</h2>
+<p>Governance gets stronger when you stop reviewing “what the assistant said it did” and start reviewing what it actually produced.</p>
+<p>That means designing your workflow so that changes come with evidence:</p>
+<ul>
+<li>tests that demonstrate behaviour, not just intent</li>
+<li>run artefacts that capture inputs, outputs, budgets, and failure modes</li>
+<li>lightweight telemetry signals that make regressions visible without a full deep-dive</li>
+</ul>
+<p>When you have that evidence layer, review becomes less about trust and more about verification. It also becomes portable: you can switch assistants (or restart sessions) without losing your ability to validate outcomes.</p>
 <h2>Why This Works With Short Sessions and Different Assistants</h2>
 <p>Most advice assumes one assistant and one long conversation.</p>
 <p>That is a fragile architecture. It depends on conversational continuity and tool-specific memory.</p>

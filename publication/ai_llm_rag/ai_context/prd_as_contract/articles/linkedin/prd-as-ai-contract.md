@@ -11,11 +11,11 @@ That’s why the PRD has to change shape.
 
 Five non-negotiables I now look for:
 
-- contract-first (inputs/outputs/invariants, not implementation narration)
-- code-blind (no file paths, no function names)
-- boundary-explicit (what it owns vs delegates)
-- determinism stated with conditions (same inputs + same config ⇒ same outputs)
-- trust posture (caps, retries, degrade modes, “insufficient evidence” behaviour)
+- contract-first: prevents the assistant from having to infer intent — the contract states inputs, outputs, and invariants explicitly
+- code-blind: stops the assistant re-implementing instead of inheriting — no file paths, no function names
+- boundary-explicit: stops scope creep before it starts — what this module owns vs delegates is stated, not assumed
+- determinism with conditions: prevents silent failure — same inputs + same config must produce the same outputs, and that must be verifiable
+- trust posture: bounds non-determinism — caps, retries, degrade modes, and “insufficient evidence” behaviour are defined, not discovered at runtime
 
 The line that prevents the most drift is often a boundary:
 non-core modules must not re-define shared platform plumbing. Inherit it and move on.
