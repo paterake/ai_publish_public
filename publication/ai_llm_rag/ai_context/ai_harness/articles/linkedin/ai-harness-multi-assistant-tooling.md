@@ -19,9 +19,9 @@ The fix:
 put the rules in the repo once, and make every assistant read from the same file.
 
 In practice:
-the Claude-specific root file becomes a two-line redirect to a shared, tool-agnostic repo context, and skills/hooks/rules live once and are shared across tools via symlinks.
+each assistant’s tool-specific “entry” file becomes a short redirect to shared, tool-agnostic repo context, and skills/hooks/rules live once and are shared across tools via symlinks.
 
-📌 CLAUDE.md is two lines: read this. Every assistant reads from the same file. That's how three tools behave as one.
+That’s how three tools behave as one.
 
 Question: what’s the first “rule” in your setup that would fail immediately if it drifted — instead of being silently ignored?
 

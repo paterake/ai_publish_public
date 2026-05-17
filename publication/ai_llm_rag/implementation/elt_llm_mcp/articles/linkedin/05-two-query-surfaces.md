@@ -4,18 +4,18 @@ The librarian doesn’t store the information. They know where everything is, wh
 
 That insight drove the architecture for how we exposed a governance knowledge base to two different audiences:
 
-→ Developers and IDE assistants get an MCP server — they call tools directly, chain queries, run pipelines.
-→ Business users get an HTTP agent — they ask questions in plain language and receive answers with a full evidence trail.
+- Developers and IDE assistants get an MCP server — they call tools directly, chain queries, run pipelines.
+- Business users get an HTTP agent — they ask questions in plain language and receive answers with a full evidence trail.
 
 Both reach the same knowledge base. Neither duplicates the other.
 
 Three things the system knows that a naive “ask the AI” approach does not:
 
-→ Not every question needs synthesis. If the answer is already extracted and stored, read the file. A catalogue lookup returns in milliseconds. RAG takes seconds and adds model variance. Route to the cheapest correct source first.
+- Not every question needs synthesis. If the answer is already extracted and stored, read the file. A catalogue lookup returns in milliseconds. RAG takes seconds and adds model variance. Route to the cheapest correct source first.
 
-→ Relationship questions need a map, not a library. “What governs this role?” is not a text retrieval question — it is a traversal question. The knowledge graph answers it deterministically. The language model explains what the graph returned.
+- Relationship questions need a map, not a library. “What governs this role?” is not a text retrieval question — it is a traversal question. The knowledge graph answers it deterministically. The language model explains what the graph returned.
 
-→ A fluent answer with no evidence trail is a demo, not a system. Every response carries the record of what was looked up, in what order, and what evidence it found. That is what makes it auditable — and trustworthy.
+- A fluent answer with no evidence trail is a demo, not a system. Every response carries the record of what was looked up, in what order, and what evidence it found. That is what makes it auditable — and trustworthy.
 
 The tool contract shapes are stable regardless of domain:
 

@@ -139,7 +139,7 @@ these two modes, and the choice shapes whether outputs are reproducible.</p>
 <p>A specific query exposed the problem: queries about regional obligations kept returning generic rules instead of the correct short compliance section.</p>
 <p>Root cause: the correct section is short and densely formatted. Its chunks had lower BM25 frequency scores (few of the query terms appeared frequently within the section) and marginally lower vector similarity scores than longer, more verbose sections. At k=24, the correct chunks consistently ranked 25th or lower — just outside the window.</p>
 <p>Raising to <code>reranker_retrieve_k=88</code> fixed it. The rationale: 44 collections × 2 sections per collection average = ~88 candidates needed to guarantee at least one representative from each section reaches the reranker.</p>
-<p>The lesson: reranker retrieve_k is not a quality knob — it is a coverage knob. Setting it too low silently excludes sparse but correct sections. You will not see an error; you will see wrong answers.</p>
+<p>The lesson: reranker retrieve_k is not a quality knob — it is a coverage knob. Setting it too low silently excludes sparse but correct sections. You will not see an error; you will see plausible answers citing the wrong sources.</p>
 <h3>Context Ordering: Where Chunks Land in the Window</h3>
 <p>After reranking, there is one more step before chunks reach the LLM: reordering them within
 the context window.</p>

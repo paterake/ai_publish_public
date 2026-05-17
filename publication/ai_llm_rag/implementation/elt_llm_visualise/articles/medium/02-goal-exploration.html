@@ -34,7 +34,7 @@
 <p>For a six-column weather dataset, plausible-looking means: a temperature trend, a precipitation bar chart, a wind speed summary. Not wrong, but not interesting. An analyst with domain knowledge would ask: does precipitation correlate with temperature range? Is there a seasonal pattern to the wind? Which weather type contributes most to total precipitation?</p>
 <p>Those are hypotheses — statements about what might be true — and they produce more targeted, more insightful charts.</p>
 <h2>Goal Exploration: commit to intent before planning charts</h2>
-<p>In the platform’s visualisation module (called <code>elt_llm_visualise</code> in this codebase), when <code>mode: infer_visualisations</code> is set, the pipeline runs a Goal Exploration step before any chart is planned.</p>
+<p>In the platform’s visualisation module (called <code>ai_visualise</code> in this codebase), when <code>mode: infer_visualisations</code> is set, the pipeline runs a Goal Exploration step before any chart is planned.</p>
 <p>The LLM receives a compact statistical summary of the dataset — column types, cardinalities, null rates, value distributions, date ranges. It does not receive raw rows.</p>
 <p>It is then asked to generate 3-5 analytical goals and hypotheses: specific questions this dataset could answer, areas of variance worth investigating, and relationships between columns likely to surface insights. It must commit to these hypotheses explicitly before designing any charts.</p>
 <p>This is the compact statistical summary the LLM sees for the Seattle weather dataset (1,461 rows, 6 columns, 2012-2015):</p>

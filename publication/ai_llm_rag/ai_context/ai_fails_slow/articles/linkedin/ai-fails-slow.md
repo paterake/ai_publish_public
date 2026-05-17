@@ -1,8 +1,8 @@
-AI failing fast is an incident.  
+AI failing fast is an incident.
+
 AI failing slow is decay.
 
 Fast failures are noisy:
-
 - A build breaks.
 - A validator fails.
 - A change is obviously wrong.
@@ -10,7 +10,6 @@ Fast failures are noisy:
 You can roll back, learn, and rebuild confidence because there’s a clear point of recovery.
 
 Slow failures are quieter:
-
 - constraints get softened
 - docs drift away from code
 - “done vs todo” blurs across sessions

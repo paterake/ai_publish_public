@@ -67,7 +67,7 @@ a mechanical swap, not a redesign.</p>
 for a problem you do not yet understand. Build custom first to establish the contract. Then
 replace the implementation while keeping the contract intact.</p>
 <h2>The 13 Primitives</h2>
-<p>A shared core package (called <code>elt_llm_core</code> in this codebase) provides 13 primitives. Every module in the platform can opt in by
+<p>A shared core package (called <code>ai_core</code> in this codebase) provides 13 primitives. Every module in the platform can opt in by
 calling these helpers — nothing runs unless a module invokes them.</p>
 <p><strong># — Primitive — What it does</strong></p>
 <ul>
@@ -81,9 +81,9 @@ calling these helpers — nothing runs unless a module invokes them.</p>
 <li><strong>8</strong> — Contract helpers — <code>exception_to_error</code> and <code>normalise_tool_result</code> — stable error/result envelopes at module boundaries</li>
 <li><strong>9</strong> — Evaluation harness — Two-mode dispatch: deterministic expected-based (CI, zero LLM calls) and RAGAS judge-mode (faithfulness, answer relevance, context precision); objective retrieval metrics (Hit@k, MRR, NDCG)</li>
 <li><strong>10</strong> — Feedback events (HITL) — Standard feedback schema tied to <code>run_id</code>; dataset export utility for privacy-safe analysis</li>
-<li><strong>11</strong> — Semantic cache + guardrails + artifact registry — Embedding-based semantic cache (JSONL or Redis backend); semantic guardrails (PII + injection); artifact snapshot/promotion/rollback pointers</li>
+<li><strong>11</strong> — Semantic cache + guardrails + artefact registry — Embedding-based semantic cache (JSONL or Redis backend); semantic guardrails (PII + injection); artefact snapshot/promotion/rollback pointers</li>
 <li><strong>12</strong> — Ops reporting + retention — Offline drift/performance report from telemetry; age/size-based cleanup for telemetry, traces, manifests</li>
-<li><strong>13</strong> — Artifact promotion / rollback — CLI for promoting corpus, graph, and index snapshots to named pointers (<code>production.txt</code>); rollback is a re-promotion</li>
+<li><strong>13</strong> — Artefact promotion / rollback — CLI for promoting corpus, graph, and index snapshots to named pointers (<code>production.txt</code>); rollback is a re-promotion</li>
 </ul>
 <p>Every module that consumes the core package gets all 13 primitives. They do not each define
 their own config schema, model factory, or telemetry sink. They call the shared helpers and

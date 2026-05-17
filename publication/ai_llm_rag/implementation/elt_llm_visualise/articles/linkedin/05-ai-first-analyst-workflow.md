@@ -1,6 +1,6 @@
 The mistake is treating LLM visualisation as a chart generator.
 The value is an analyst workflow: intent, evidence, critique, outputs.
-So I built an AI-first loop that produces artifacts you can audit.
+So I built an AI-first loop that produces artefacts you can audit.
 
 There is a version of "AI-assisted analysis" that does not change how you work. You write SQL, export a CSV, open a notebook, and at some point ask an AI to suggest a chart type. It says "bar chart." You were already going to use a bar chart.
 

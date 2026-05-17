@@ -4,7 +4,7 @@
 
 <h1>The AI-First Analyst Workflow: The LLM Proposes, the Runtime Proves</h1>
 <p><strong>Series:</strong> LLM-Driven Data Visualisation — Part 5 of 7</p>
-<p>The mistake is treating LLM visualisation as a chart generator. The value is an analyst workflow: intent, evidence, critique, outputs. This is the end-to-end architecture of an AI-first loop that produces artifacts you can audit.</p>
+<p>The mistake is treating LLM visualisation as a chart generator. The value is an analyst workflow: intent, evidence, critique, outputs. This is the end-to-end architecture of an AI-first loop that produces artefacts you can audit.</p>
 <h2>Key takeaways</h2>
 <ul>
 <li>The LLM proposes; the runtime proves: validation, critique, and deterministic execution sit between intent and output.</li>
@@ -22,10 +22,10 @@
 <h2>Constraints</h2>
 <ul>
 <li>Local-first / zero data egress where relevant</li>
-<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
 </ul>
 <p>There is a version of "AI-assisted analysis" that does not change how you work. You write SQL. You export a CSV. You open a notebook. At some point you ask an AI assistant to suggest a chart type, and it says "bar chart." You were already going to use a bar chart. Nothing changed.</p>
-<p>The analyst workflow in the platform’s visualisation module (called <code>elt_llm_visualise</code> in this codebase) is built on a different premise: the AI does the analytical work, and the runtime proves that the work is correct. The analyst defines the question. The pipeline answers it.</p>
+<p>The analyst workflow in the platform’s visualisation module (called <code>ai_visualise</code> in this codebase) is built on a different premise: the AI does the analytical work, and the runtime proves that the work is correct. The analyst defines the question. The pipeline answers it.</p>
 <p>This article describes the end-to-end workflow — from question to shareable report — and explains why each step is designed the way it is.</p>
 <h2>The design principle: a trust boundary between proposal and proof</h2>
 <p>Every AI-first system has an implicit trust boundary: a line between what the AI is allowed to decide and what the system verifies independently. In most AI charting tools, the boundary is permissive — the AI decides, and if the output looks reasonable, it ships.</p>

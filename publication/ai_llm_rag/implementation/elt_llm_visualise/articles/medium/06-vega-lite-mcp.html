@@ -22,7 +22,7 @@
 <h2>Constraints</h2>
 <ul>
 <li>Local-first / zero data egress where relevant</li>
-<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
 </ul>
 <p>Most AI assistants can describe a dataset in detail. The bottleneck is turning that description into a chart a human can review, share, and iterate on — without writing plotting code.</p>
 <p>The Vega-Lite Model Context Protocol (MCP) pattern closes that gap. The assistant reasons in chat. When a chart is needed, it calls a rendering tool that accepts a declarative Vega-Lite spec and returns a rendered output. No Python. No <code>exec()</code>. No chart library API calls embedded in conversation.</p>

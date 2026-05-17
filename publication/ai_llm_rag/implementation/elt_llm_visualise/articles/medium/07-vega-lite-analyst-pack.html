@@ -22,14 +22,14 @@
 <h2>Constraints</h2>
 <ul>
 <li>Local-first / zero data egress where relevant</li>
-<li>Outputs must be auditable (sources, artifacts, manifests)</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
 </ul>
 <p>There is a quiet but important distinction in AI charting:</p>
 <ul>
 <li>A demo system produces a chart once.</li>
 <li>A production system produces a chart pack repeatedly, with traceability, validation, and bounded failure modes.</li>
 </ul>
-<p>This article documents the complete workflow in the platform’s visualisation module (called <code>elt_llm_visualise</code> in this codebase): a config-driven pipeline that asks an LLM to propose an analyst pack, validates every spec deterministically, and repairs only what fails — leaving the rest of the plan intact.</p>
+<p>This article documents the complete workflow in the platform’s visualisation module (called <code>ai_visualise</code> in this codebase): a config-driven pipeline that asks an LLM to propose an analyst pack, validates every spec deterministically, and repairs only what fails — leaving the rest of the plan intact.</p>
 <p>The design goal is publication and stakeholder use. A silent wrong chart is worse than a loud correct failure.</p>
 <h2>The problem: LLM charting breaks in predictable ways</h2>
 <p>Modern models describe datasets well. The failure modes when generating charts are also predictable:</p>

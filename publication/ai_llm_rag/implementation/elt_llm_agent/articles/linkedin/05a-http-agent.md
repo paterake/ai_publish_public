@@ -8,23 +8,23 @@ The first naive implementation is also the fastest way to destroy trust: a fluen
 
 What we built instead: an audit-first HTTP agent that routes questions through bounded tools — catalogue lookup, relationship graph query, handbook text retrieval — and returns three things alongside every answer:
 
-→ The ordered tool call trace (what was looked up, in what sequence)
-→ The evidence and sources used (which documents, which scores)
-→ The final answer grounded in those sources
+- The ordered tool call trace (what was looked up, in what sequence)
+- The evidence and sources used (which documents, which scores)
+- The final answer grounded in those sources
 
 📌 Every response carries its own proof. Not because we added a feature — because the architecture makes it impossible to answer without one.
 
 Two turning points that changed the design:
 
-→ Citations alone weren’t enough. A list of sources at the bottom of an answer doesn’t tell you what the system actually did. The decision path matters: which tool was called, in what order, and why.
+- Citations alone weren’t enough. A list of sources at the bottom of an answer doesn’t tell you what the system actually did. The decision path matters: which tool was called, in what order, and why.
 
-→ When evidence is missing, the correct behaviour is to surface the gap — not fill it. “I looked for this and found nothing” is a better answer than a confident wrong one.
+- When evidence is missing, the correct behaviour is to surface the gap — not fill it. “I looked for this and found nothing” is a better answer than a confident wrong one.
 
 The response envelope shape is stable and auditable:
 
-→ answer: the synthesised response
-→ tool_calls: what was looked up, in what order
-→ sources: the document, collection, and confidence score for each piece of evidence
+- answer: the synthesised response
+- tool_calls: what was looked up, in what order
+- sources: the document, collection, and confidence score for each piece of evidence
 
 No black box. Every answer explains itself.
 

@@ -32,11 +32,11 @@
 <p><strong>Silent divergence.</strong> Over weeks, each config evolves separately. No assistant knows the others exist. No test detects that they have drifted. This is the worst failure mode: each session gives slightly different results depending on which tool you open, and the cause is invisible.</p>
 <h2>The inversion: a tool-specific root file as a redirect</h2>
 <p>The simplest change has the most structural consequence.</p>
-<p>The root instruction file for one assistant in this project is:</p>
+<p>The root instruction file for each assistant in this project is:</p>
 <pre><code class="language-markdown">See the repository’s shared AI context for project conventions, assistant roles, skills, memory, and workflow.
 </code></pre>
 <p>Two lines. One is a pointer. One is blank.</p>
-<p>The point is not minimalism. A tool-specific root file is invisible to every other tool. By making it a pointer, all substantive configuration is forced into a shared, git-tracked directory — tool-agnostic, portable, and readable by every assistant from a single clone.</p>
+<p>The point is not minimalism. A tool-specific root file is invisible to every other tool. By making it a pointer, all substantive configuration is forced into a shared, git-tracked directory — tool-agnostic, portable, and readable by every assistant from the same clone.</p>
 <p>The root file never drifts from the actual rules, because it contains none. The rules live in one place. The pointer is permanent.</p>
 <h2>The harness: one location, many consumers</h2>
 <p>A shared harness directory is the single canonical location for assistant tooling, with three subdirectories:</p>
@@ -47,7 +47,7 @@
 </ul>
 <p>Each assistant's native configuration directory contains one tool-specific settings file plus symlinks to all three shared directories:</p>
 <ul>
-<li><code>tool_settings.json</code> — tool-specific configuration (permission allowlists, hook registration syntax); the only file that varies per assistant</li>
+<li>one small tool-specific settings file (permissions, hook registration syntax); the only file that varies per assistant</li>
 <li><code>skills/</code> → symlink to <code>&lt;shared-harness&gt;/skills</code></li>
 <li><code>hooks/</code> → symlink to <code>&lt;shared-harness&gt;/hooks</code></li>
 <li><code>rules/</code> → symlink to <code>&lt;shared-harness&gt;/rules</code></li>
@@ -63,7 +63,7 @@
   &quot;matcher&quot;: &quot;Write|Edit|MultiEdit&quot;,
   &quot;hooks&quot;: [{
     &quot;type&quot;: &quot;command&quot;,
-    &quot;command&quot;: &quot;if [[ \&quot;$CLAUDE_TOOL_FILE_PATH\&quot; == *.py ]]; then uv run ruff format \&quot;$CLAUDE_TOOL_FILE_PATH\&quot; &gt;/dev/null 2&gt;&amp;1 || true; fi&quot;
+    &quot;command&quot;: &quot;if [[ \&quot;$CHANGED_FILE\&quot; == *.py ]]; then ruff format \&quot;$CHANGED_FILE\&quot; &gt;/dev/null 2&gt;&amp;1 || true; fi&quot;
   }]
 }
 </code></pre>
@@ -78,14 +78,15 @@ cmd=&quot;$(printf '%s' &quot;$payload&quot; | jq -r '.tool_input.command // emp
 
 case &quot;$cmd&quot; in
   *&quot;git push&quot;*&quot;origin main&quot;*|*&quot;git push&quot;*&quot; main&quot;*)
-    jq -nc '{&quot;permissionDecision&quot;: &quot;defer&quot;, &quot;reason&quot;: &quot;Push to main requires human approval.&quot;}'
+    echo &quot;Push to main requires human approval.&quot; &gt;&amp;2
+    exit 2
     ;;
   *)
-    jq -nc '{&quot;permissionDecision&quot;: &quot;allow&quot;}'
+    exit 0
     ;;
 esac
 </code></pre>
-<p>Any command matching a push to <code>main</code> returns <code>"permissionDecision": "defer"</code>. The session pauses for human review. All other commands pass through immediately.</p>
+<p>Any command matching a push to <code>main</code> is blocked and requires explicit human approval. All other commands pass through immediately.</p>
 <p>The gate is a shell script rather than an inline command — auditable, editable, version-controlled. Adding a new gate (deferring force-pushes, production deploys) is a single-line change in one file that immediately applies to every assistant session.</p>
 <p>Both hooks live in the shared harness and are shared across all assistants via the symlink pattern.</p>
 <h2>Three awareness layers</h2>

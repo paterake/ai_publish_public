@@ -20,7 +20,7 @@
 </ul>
 <p>Most data reporting pipelines look like this: write a SQL query, export to CSV, open Excel or a Python notebook, decide what charts to draw, format them, export images, paste into a slide deck. Do it again next month.</p>
 <p>The problem is not the tools. The problem is that every step requires a human decision, and none of those decisions are recorded anywhere. When the dataset changes or someone asks "what exactly did you show last quarter?", you start over.</p>
-<p>In the platform’s visualisation module (called <code>elt_llm_visualise</code> in this codebase), explicit mode replaces the manual steps with a config file. The analyst describes what to show in YAML. The pipeline reads the dataset, executes transformations in Pandas, and writes an HTML report with an audit trail. No Python chart code. No decisions lost in a notebook.</p>
+<p>In the platform’s visualisation module (called <code>ai_visualise</code> in this codebase), explicit mode replaces the manual steps with a config file. The analyst describes what to show in YAML. The pipeline reads the dataset, executes transformations in Pandas, and writes an HTML report with an audit trail. No Python chart code. No decisions lost in a notebook.</p>
 <h2>Why most reporting pipelines are not reproducible</h2>
 <p>Most practitioners who need to automate reporting reach for matplotlib or Plotly scripts. The pattern is familiar:</p>
 <pre><code class="language-python">df = pd.read_csv(&quot;data.csv&quot;)
