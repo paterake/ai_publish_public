@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The Backlog Continuity Contract: How to Make AI Work Resumable Across Sessions</h1>
+<p>The biggest lie in AI-assisted development is that chat history is a system of record.</p>
+<p>It isn’t.</p>
+<p>If a piece of work spans multiple sessions, the most common failure modes aren’t about capability. They’re about continuity:</p>
+<ul>
+<li>constraints decided earlier are forgotten later</li>
+<li>“done vs todo” state is unclear, so work is redone</li>
+<li>long chats accumulate noise and subtle rules get diluted</li>
+<li>a different assistant can’t pick up the thread without rereading everything</li>
+</ul>
+<p>This article describes a simple pattern that fixes that: a backlog continuity contract.</p>
+<p>It’s a way to write backlog documents so any assistant can resume from a cold start in one line, without relying on previous conversations.</p>
+<p>The idea is simple: treat the assistant as stateless by default, and make the system stateful through durable artefacts.</p>
+<p>One thing that’s easy to miss: in a harnessed workflow, this is not a discipline a human “keeps up”.
+The harness owns the continuity loop. Updating the anchor document is part of the assistant’s completion step for each item.
+No human clerk. No copy/paste summaries between sessions. If the anchor doc isn’t updated, the work isn’t done.</p>
+<h2>The Cynic’s Objection (And Why It Misses the Point)</h2>
+<p>You can hear the pushback coming:</p>
+<ul>
+<li>“Just get a bigger context window.”</li>
+<li>“Just buy a bigger machine.”</li>
+<li>“Just work in smaller pieces.”</li>
+</ul>
+<p>All three miss the actual failure mode.</p>
+<p>This pattern is not a workaround for limited compute. It is a governance solution for a non-deterministic collaborator.</p>
+<p>Bigger context does not give you durable state. It gives you more transient text to interpret. The hard problems that break multi-session work are not about whether the assistant can physically read more. They’re about whether the system can reliably preserve:</p>
+<ul>
+<li>what is done vs still in progress</li>
+<li>which constraints remain active</li>
+<li>how to verify correctness</li>
+</ul>
+<p>“Work in smaller pieces” is directionally right — and it is exactly what this contract assumes. The difference is that without a durable hand-off, “piecemeal” work still leaks constraints and forces re-triage in the next session. Stable anchors plus minimal hand-offs make small-slice work resumable without relying on memory.</p>
+<h2>This Is a Collaboration System, Not a Prompt</h2>
+<p>Most advice about AI coding assistants treats the unit of design as a prompt: write better instructions and you get better outcomes.</p>
+<p>The unit of design here is the collaboration.</p>
+<p>Once work spans multiple sessions, you are building a system with:</p>
+<ul>
+<li><strong>state</strong> (done vs todo, decisions already made)</li>
+<li><strong>constraints</strong> (what must not change)</li>
+<li><strong>verification</strong> (how you know it’s correct)</li>
+<li><strong>handoffs</strong> (how the next session resumes without re-triage)</li>
+</ul>
+<p>If those things live only in chat history, you don’t have a system of record. You have an improv transcript.</p>
+<p>Anchors and hand-offs turn collaboration state into durable artefacts — and that is why the pattern works.</p>
+<h2>The Operating Model: New Session Per Backlog Item</h2>
+<p>The counterintuitive part of this pattern is that it assumes short sessions on purpose.</p>
+<p>For long-running backlogs, the intended workflow is:</p>
+<ol>
+<li>Use a new session for each bounded backlog item</li>
+<li>Update the backlog document at the end of the item</li>
+<li>Let the next session resume from the updated document</li>
+</ol>
+<p>This is not a fallback for when a chat gets too long. It is the primary operating model.</p>
+<p>Why it works:</p>
+<ul>
+<li>a fresh session attends to the loaded context at full precision</li>
+<li>item-specific constraints don’t leak into the next item as residual context</li>
+<li>you stop treating “remembering what we did” as the assistant’s job</li>
+</ul>
+<p>The document becomes the memory surface.</p>
+<p>In practice, the “end of session” protocol is automated:
+the outgoing assistant writes the hand-off back into the anchor doc as structured state (done / constraints / next / verification), so the next session can start from the document alone.
+You can review the diff if you want to, but continuity does not depend on you doing anything manually.</p>
+<h2>The Key Insight: Chat History Is Not Durable State</h2>
+<p>Chat transcripts don’t scale for either humans or assistants:</p>
+<ul>
+<li>humans can’t efficiently reconstruct state from many hours of conversation</li>
+<li>assistants can’t reliably infer which old statements are still true</li>
+<li>critical constraints disappear simply because they aren’t repeated</li>
+</ul>
+<p>If correctness depends on constraints across time, those constraints must be written somewhere durable.</p>
+<h2>The Pattern: One Anchor Document Per Thread</h2>
+<p>Choose exactly one anchor document per backlog thread.</p>
+<p>Examples:</p>
+<ul>
+<li>cross-module refactor: a single root tracker</li>
+<li>module enhancement backlog: a module TODO</li>
+<li>contract gaps: the module PRD</li>
+</ul>
+<p>Do not maintain the same plan in multiple places. Link instead.</p>
+<p>The anchor document is the durable thread state.</p>
+<h2>Tracking Crumbs: The Minimal Hand-Off That Makes Resumption Work</h2>
+<p>At the end of each backlog item, the outgoing assistant writes “tracking crumbs” for the incoming assistant.</p>
+<p>This is not a narrative summary and it is not “notes for the human”.
+It is a structured hand-off written specifically so the next assistant can resume from a cold start, and the harness can keep the thread coherent without a person reconstructing context from chat.</p>
+<p>The crumbs answer four questions:</p>
+<ol>
+<li><strong>Where did we get to?</strong> (what changed, at file level)</li>
+<li><strong>What must not change?</strong> (constraints that remain active)</li>
+<li><strong>What comes next?</strong> (the next ordered action)</li>
+<li><strong>How do we know it’s correct?</strong> (the exact verification step)</li>
+</ol>
+<p>Write crumbs as if briefing a capable colleague who has never seen the prior chat.</p>
+<p>Precise. Factual. Minimal.</p>
+<h2>Constraint Inheritance: The Part Most Backlogs Miss</h2>
+<p>Continuity is not only “what’s next”.</p>
+<p>Every completed item establishes constraints that future items must honour. Those constraints accumulate.</p>
+<p>If you do not explicitly forward them, a future assistant has no reason to apply them.</p>
+<p>This is where drift appears: not because the assistant is careless, but because the constraint was never stated in the next item.</p>
+<p>The rule is simple:</p>
+<blockquote>
+<p>If a constraint remains active after an item completes, it must be written into the anchor document as an inherited constraint.</p>
+</blockquote>
+<h2>The One-Line Resume Prompt</h2>
+<p>When the anchor document is maintained, resuming becomes a single line:</p>
+<blockquote>
+<p>From <code>&lt;anchor_doc&gt;</code>: continue <code>&lt;item anchor&gt;</code>.</p>
+</blockquote>
+<p>You are no longer asking the assistant to remember. You are asking it to read.</p>
+<h2>Why This Makes Each Session More Productive</h2>
+<p>This pattern does three things simultaneously:</p>
+<ul>
+<li>reduces token burn (only the active slice needs to be loaded)</li>
+<li>increases correctness (constraints are explicit, not inferred)</li>
+<li>makes multi-assistant work coherent (any tool can read the same anchor state)</li>
+</ul>
+<p>It also changes the human experience.</p>
+<p>Instead of “keep a long chat alive so we don’t lose context”, the operator experience becomes:</p>
+<ul>
+<li>pick the next item</li>
+<li>start a fresh session</li>
+<li>(optionally) review the diff</li>
+</ul>
+<p>The system stays coherent because the backlog document is the continuity mechanism.</p>
+<h2>If You’re Starting From Scratch</h2>
+<p>If you want to retrofit this to an existing tracker, start with:</p>
+<ol>
+<li>Add a short “Next up” list that points to stable anchors</li>
+<li>Ensure each backlog item has a stable anchor ID</li>
+<li>Add a hand-off template under each item (done, constraints, next, verification)</li>
+</ol>
+<p>After that, the pattern becomes self-reinforcing: each completed item writes the scaffolding that makes the next item easy.</p>
+<p>The result is a workflow that scales across sessions, across assistants, and across time.</p>
+<h2>Limits / When Not to Use</h2>
+<ul>
+<li>If the work is a single, one-hour task, the overhead is not worth it.</li>
+<li>If you refuse to update the anchor document, the system has no durable memory surface to resume from.</li>
+<li>If you maintain multiple competing trackers, the pattern collapses into drift again.</li>
+</ul>
+
+</body>
+</html>

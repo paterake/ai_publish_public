@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The PRD as an AI-Assistant Contract</h1>
+<p><em>A PRD written as “documentation about the code” cannot govern an AI coding assistant.</em></p>
+<p>Most PRDs are written for a human reader.</p>
+<p>They assume the reader will:</p>
+<ul>
+<li>infer intent from context</li>
+<li>fill in gaps with experience</li>
+<li>open the code when something is ambiguous</li>
+</ul>
+<p>That assumption breaks the moment an AI coding assistant becomes part of the delivery team.</p>
+<p>An assistant doesn’t “read between the lines”. It executes what you described. If your PRD is a loose brief, you get a loose implementation. If your PRD is a contract, you get something you can govern.</p>
+<p>This article is about the structural change:</p>
+<p><strong>A good AI-era PRD is not documentation about the current code. It’s a contract for what must be true — independent of how the code achieves it.</strong></p>
+<h2>Key takeaways</h2>
+<ul>
+<li>A PRD that lists files and classes is not a spec. It’s a memory aid for humans.</li>
+<li>AI-ready PRDs are contract-first, code-blind, and boundary-explicit.</li>
+<li>The most important line in a PRD is often what it refuses to own.</li>
+</ul>
+<h2>The failure mode: “documentation about code”</h2>
+<p>If you have ever written a PRD that says something like:</p>
+<ul>
+<li>“add a new class called X”</li>
+<li>“update file Y”</li>
+<li>“add tests under Z”</li>
+</ul>
+<p>you wrote something that can work for a human team, because humans understand what those instructions are <em>really trying to achieve</em>.</p>
+<p>For an AI assistant, those instructions are a trap.</p>
+<p>They anchor the assistant on artefacts (files, classes) instead of outcomes (contracts, invariants). The assistant optimises for producing the named artefacts, and the system drifts away from the real requirement.</p>
+<p>The coupling is the problem — and it is silent in the way that matters: teams writing "update file Y" don’t notice they’ve written a spec that breaks the moment the file is renamed or restructured. The specification has been tied to the implementation, invisibly, and no one realises it until a refactor makes the PRD wrong.</p>
+<p>Contracts shouldn’t do that.</p>
+<h2>What an AI-ready PRD must enable</h2>
+<p>Here is the standard I hold PRDs to when an assistant is involved:</p>
+<p>The PRD must describe the module intent, scope, contracts, and boundaries well enough that an assistant could rebuild the module’s functionality without opening implementation files.</p>
+<p>That sounds extreme until you notice what it forces:</p>
+<ul>
+<li>You must be explicit about inputs and outputs.</li>
+<li>You must state what “correct” means.</li>
+<li>You must name the failure envelope.</li>
+</ul>
+<p>In other words: you must write the things that matter even if the code is rewritten.</p>
+<h2>Five non-negotiables</h2>
+<h3>1) Contract-first</h3>
+<p>Describe what the module guarantees:</p>
+<ul>
+<li>inputs (schemas, required fields, validation)</li>
+<li>outputs (artefacts, schemas, stability promises)</li>
+<li>invariants (what must always be true)</li>
+</ul>
+<p>Avoid narrating the implementation.</p>
+<p>When an assistant changes the implementation, the contract remains stable. That stability is the governance surface.</p>
+<h3>2) Code-blind</h3>
+<p>Do not reference implementation file paths, function names, or unit test files.</p>
+<p>Those are artefacts. The code is one possible realisation.</p>
+<p>If a PRD can only be understood by opening the repo, it is not governing the repo. It is describing it.</p>
+<h3>3) Boundary-explicit</h3>
+<p>State what the module owns vs what it delegates.</p>
+<p>This is where most PRDs fail, because boundaries are uncomfortable. They force trade-offs. They force you to say “no”.</p>
+<p>But boundaries are where systems stay coherent.</p>
+<p>If you don’t state boundaries, you get duplication: every module implements its own “helpful” version of the same primitive. That looks productive in the short term. It becomes drift in the long term.</p>
+<h3>4) Determinism where promised</h3>
+<p>If you claim deterministic outputs, state the conditions.</p>
+<p>“Deterministic” is not a vibe. It is a contract:</p>
+<ul>
+<li>same inputs + same config ⇒ same outputs</li>
+<li>if the module calls an LLM, name what makes it deterministic (or explicitly state where it is probabilistic)</li>
+</ul>
+<p>Without conditions, “deterministic” becomes marketing language. That destroys trust.</p>
+<h3>5) Trust posture</h3>
+<p>State caps and safety boundaries:</p>
+<ul>
+<li>what is rejected vs degraded vs retried</li>
+<li>what constitutes “insufficient evidence”</li>
+<li>what happens when a dependency is unavailable</li>
+</ul>
+<p>For AI-assisted systems, trust posture is not optional. It is the difference between a tool and a liability.</p>
+<h2>The boundary rule most teams miss</h2>
+<p>One rule prevents a huge amount of drift:</p>
+<p><strong>Non-core modules must not re-define shared platform plumbing.</strong></p>
+<p>If you have a shared platform layer — observability primitives, run context, manifests, evaluation hooks — the contract for those lives once. Every other module inherits it.</p>
+<p>PRDs that duplicate shared plumbing create two sources of truth. Two sources of truth is drift with a delay.</p>
+<p>The PRD should name inheritance in one sentence and move on.</p>
+<h2>A minimal PRD shape that works</h2>
+<p>If you want a practical template, here is the minimal shape that consistently governs assistants:</p>
+<ol>
+<li><strong>Problem</strong>: what pain exists and why it is hard</li>
+<li><strong>Solution</strong>: one paragraph, high level</li>
+<li><strong>Scope and boundaries</strong>: owns; delegates; out of scope</li>
+<li><strong>Contracts</strong>: inputs; outputs; error envelope</li>
+<li><strong>Requirements</strong>: functional requirements (SHALL statements); non-functional requirements (caps, determinism conditions, safety)</li>
+<li><strong>Acceptance criteria</strong>: verifiable checkboxes tied to the contracts</li>
+<li><strong>Known limitations</strong>: honest, explicit, bounded</li>
+</ol>
+<p>This looks more formal than many PRDs. In practice it’s less work than “describe the implementation”, because it forces you to write only the information that survives change.</p>
+<h2>Close</h2>
+<p>An AI coding assistant doesn’t make requirements less important.</p>
+<p>It makes weak requirements visible.</p>
+<p>If your PRD is a brief, the assistant will treat it as a brief. If your PRD is a contract, the assistant has something stable to build against, refactor against, and be held accountable to.</p>
+<p>There is a deeper reason why this matters now more than before. In traditional development, code was the primary artefact — the PRD described what the code should do, but the code was what shipped. In AI-assisted development, this inverts: code is generated on demand from direction. The PRD is the primary artefact. It is the thing that cannot be regenerated without human effort — the encoded intent, the stated constraint, the invariant that must hold regardless of how the implementation is rewritten. Code is the by-product.</p>
+<p>Write the PRD accordingly: as the thing that outlasts any implementation, not as a description of the one you currently have.</p>
+
+</body>
+</html>

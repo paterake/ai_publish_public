@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Ingestion Is Where RAG Quality Is Won</h1>
+<p>Most RAG quality problems start at ingestion. If you destroy structure upstream, you can’t prompt it back later. This is why ingestion must be treated as a substrate decision, not just plumbing.</p>
+<p>When an answer is wrong, teams reach for prompts, rerankers, and bigger models. Those help, but only after the
+retrieval substrate is correct. If ingestion turns structured material into fragmented prose, no amount of
+synthesis will reconstruct what you destroyed upstream.</p>
+<p>This article is the story of building an ingestion layer that treats different source types differently and
+produces the right substrate for each.</p>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
+</ul>
+<h2>Why Heterogeneous Sources Don’t Behave Like Text fails at scale</h2>
+<p>Enterprise knowledge is not one format. It is:</p>
+<ul>
+<li>layout-heavy documents</li>
+<li>semi-structured tables</li>
+<li>structured models and inventories</li>
+</ul>
+<p>If you treat everything as “chunks to embed”, you end up with:</p>
+<ul>
+<li>broken semantic units (tables split mid-row)</li>
+<li>loss of hierarchy (headings and sections flattened)</li>
+<li>higher downstream cost (more chunks, larger prompts)</li>
+<li>lower trust (answers feel random because evidence is fragmented)</li>
+</ul>
+<h2>What most teams try first: Put Everything Into RAG</h2>
+<p>The naive design is simple:</p>
+<ol>
+<li>convert every source to text</li>
+<li>chunk it</li>
+<li>embed it</li>
+<li>retrieve and synthesise</li>
+</ol>
+<p>It works until you hit structured sources.</p>
+<p>For many inputs, retrieval is not the right primitive. If you already have a schema (or can infer one safely),
+the best representation is deterministic JSON, not probabilistic search over prose.</p>
+<h2>How the solution works: A Dual Store + Deterministic Sidecars</h2>
+<p>The ingestion design is a substrate decision:</p>
+<ul>
+<li><strong>Unstructured sources</strong> → chunks + embeddings + dual retrieval substrate (dense vectors + sparse docstores)</li>
+<li><strong>Structured sources</strong> → deterministic JSON sidecars (and optional retrieval text when it is genuinely useful)</li>
+</ul>
+<p>This gives downstream modules two options:</p>
+<ul>
+<li>retrieve evidence when the answer lives in text</li>
+<li>look up a record deterministically when the answer is a field</li>
+</ul>
+<p>That boundary is the anti-hallucination posture: use deterministic artefacts when possible.</p>
+<h2>Result: Downstream Modules Get Better Inputs</h2>
+<p>Once ingestion produces coherent chunks and deterministic models, downstream behaviour improves:</p>
+<ul>
+<li>fewer “lost in the middle” failures because context is shaped from coherent units</li>
+<li>fewer hallucinations because structured facts are retrieved deterministically</li>
+<li>lower runtime cost because the retrieval substrate is smaller and more relevant</li>
+</ul>
+<p>Proof points to capture before publishing:
+- [NEEDS_DATA: one publish-safe example showing table-aware chunking vs naive chunking]
+- [NEEDS_DATA: cost/throughput comparison before/after ingestion changes]</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>Layout-heavy PDFs remain hard; even strong parsers can lose tables and hierarchy.</li>
+<li>Chunking is a trade-off (coherence vs recall vs cost); defaults must be justified by real runs.</li>
+<li>Deterministic sidecars require a stable schema; if the schema changes weekly, you will churn.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; Docling PDF preprocessor (<code>table_format=markdown</code>, <code>split_by_sections=true</code>, tuned <code>section_splitting.*</code>); chunking <code>strategy=table_aware</code> with bounded <code>chunk_size</code>/<code>chunk_overlap</code></li>
+<li>Dataset class: internal governance handbook PDF + enterprise architecture model exports (anonymised; no client identifiers); public PDF equivalents for publish-safe examples</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>The Lesson</h2>
+<p>Ingestion is not plumbing. It is the foundation of retrieval quality.</p>
+<p>If you want reliable RAG, do not start at the model. Start at the substrate:</p>
+<ul>
+<li>what is this data type?</li>
+<li>what is the right representation?</li>
+<li>what is deterministic, and what must be probabilistic?</li>
+</ul>
+<p>That is how you build a system that stays credible as it scales.</p>
+
+</body>
+</html>

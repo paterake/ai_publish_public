@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>AI Pattern Selection: RAG, Fine-Tuning, and Context Injection</h1>
+<p>“Fine-tune it on our documents” is one of the most expensive misunderstandings in enterprise AI.</p>
+<p>The reason is simple:</p>
+<p><strong>Fine-tuning trains the voice. Retrieval retrieves the facts.</strong></p>
+<p>If you mix those up, you create the most dangerous failure mode in governance, compliance, and architecture work: a model that sounds authoritative while being confidently wrong, with no provenance.</p>
+<p>Use fine-tuning when the thing that is broken is behaviour (how the model responds). Use RAG when the thing that is missing is knowledge (what it can cite from your corpus with provenance).</p>
+<p>This piece is a decision framework for choosing between three patterns:</p>
+<ul>
+<li>Retrieval-Augmented Generation (RAG)</li>
+<li>Model fine-tuning</li>
+<li>Context injection</li>
+</ul>
+<p>It is not a tutorial. It is a selection guide: what each pattern changes, what it cannot do, and the trade-offs that matter in real systems.</p>
+<h2>The Three Patterns (What They Actually Do)</h2>
+<p>Before selecting an approach, be precise about what changes.</p>
+<p><strong>Pattern — What it changes — What it does not do</strong></p>
+<ul>
+<li><strong>RAG</strong> — What the model sees at inference time — Change the model itself</li>
+<li><strong>Fine-tuning</strong> — The model’s weights and behaviour — Reliably encode specific facts</li>
+<li><strong>Context injection</strong> — The input provided per request — Automate retrieval (you do that)</li>
+</ul>
+<p>A non-technical framing that tends to stick:</p>
+<p><strong>Analogy — AI pattern</strong></p>
+<ul>
+<li><strong>Giving an employee a handbook to look up answers</strong> — RAG — the model reads the document at the point of need</li>
+<li><strong>Training an employee on how to answer: tone, format, escalation</strong> — Fine-tuning — the model learns the behaviour, not the facts</li>
+<li><strong>Briefing an employee before a meeting with the relevant material</strong> — Context injection — you assemble the input, the model acts on it</li>
+</ul>
+<h3>1) Retrieval-Augmented Generation (RAG)</h3>
+<p>RAG does not modify the model. It retrieves relevant passages from a corpus and places them into the model’s context window at the point of inference.</p>
+<p>That one design choice has three practical consequences:</p>
+<ul>
+<li>Outputs are grounded in source material the model can actually read right now.</li>
+<li>The retrieved chunks are traceable: you can audit what evidence was provided.</li>
+<li>When source documents change, you update the index; you do not retrain a model.</li>
+</ul>
+<p><strong>Use RAG when:</strong></p>
+<ul>
+<li>You need accurate answers grounded in a changing document corpus.</li>
+<li>Provenance matters (citations, auditability, traceable evidence).</li>
+<li>The problem is about facts, clauses, definitions, entities, or references.</li>
+</ul>
+<p>If you are considering training because retrieval quality “isn’t good enough”, treat that as a retrieval optimisation problem first:</p>
+<ul>
+<li>Fix chunking so you don’t split clauses/entities across chunks.</li>
+<li>Enrich metadata so you can filter and retrieve with intent.</li>
+<li>Prepend section headings to each chunk so rerankers have stronger signal.</li>
+<li>Use evaluation (a small gold Q&amp;A set) to measure recall/accuracy objectively.</li>
+<li>Use query rewriting where entity synonyms and alternate terms matter.</li>
+<li>Cache frequent queries for static corpora to reduce latency and cost.</li>
+</ul>
+<h3>2) Model Fine-Tuning</h3>
+<p>Fine-tuning changes the model’s behaviour by training it on examples of the outputs you want.</p>
+<p>It is good at learning:</p>
+<ul>
+<li>Tone and institutional voice</li>
+<li>Output structure and formatting conventions</li>
+<li>Task-specific behaviour (classification, routing, tagging)</li>
+<li>Reasoning patterns demonstrated across many examples</li>
+</ul>
+<p>It is not good at becoming a reliable store of new factual knowledge. Research is consistent on this point: even full-weight fine-tuning, not just LoRA, struggles to encode and recall new factual content reliably. A model fine-tuned on a large handbook will often sound like it, without being able to faithfully recall specific clauses when queried.</p>
+<p>That is why fine-tuning is so often misapplied: people are trying to teach facts, and getting “voice” instead.</p>
+<p>It can appear to work for “canned” institutional answers in narrow cases, but it does not behave like a queryable knowledge base: no provenance, weak generalisation to paraphrases, and it goes stale without an obvious signal when the underlying facts change.</p>
+<p>Fine-tuning can also degrade general capability outside the target behaviour. Treat a fine-tuned model as a new model release: regression-test it on the critical tasks you still depend on.</p>
+<p><strong>Use fine-tuning when:</strong></p>
+<ul>
+<li>You are teaching the model how to respond (behaviour), not what to recall (facts).</li>
+<li>You have enough high-quality examples (50–100+ can work for narrow tasks; hundreds is a more typical target), and prompting keeps drifting at scale.</li>
+<li>Token economics matter at high call volumes, and you want to strip repeated harness overhead from every request.</li>
+<li>You need consistent outputs for non-technical users who cannot operate a prompt harness.</li>
+<li>The target behaviour is stable, and fast-changing facts still come via retrieval/context injection.</li>
+</ul>
+<h3>3) Context Injection (The Overlooked Third Pattern)</h3>
+<p>Context injection is assembling the relevant material for a specific task and passing it as the input. No vector store. No retrieval pipeline. No model training.</p>
+<p>This is not a “temporary hack”. For architecture and design work, it is often the most appropriate pattern because human judgement is the retrieval mechanism.</p>
+<p>If an architect has already gathered the right design docs, integration notes, and constraints for a decision, forcing that into an automated retrieval system can make the outcome worse, not better.</p>
+<p><strong>Use context injection when:</strong></p>
+<ul>
+<li>You already have the relevant material for this task.</li>
+<li>The input is project-specific and does not need to be searchable later.</li>
+<li>You want strict control over what the model sees, without retrieval noise.</li>
+<li>The task depends on scoped judgement more than open-ended discovery.</li>
+</ul>
+<h2>The Governance Failure Mode You Must Design Against</h2>
+<p>The risk is not “the model might be wrong”. The risk is:</p>
+<ul>
+<li>Wrong in the right tone</li>
+<li>Wrong with high confidence</li>
+<li>Wrong with no way to trace what it relied on</li>
+</ul>
+<p>In regulated or audited domains, that is worse than a system that sometimes returns “I don’t know”.</p>
+<p>If your use case requires traceability, you are already in retrieval territory. You do not fix traceability with training.</p>
+<h2>A Practical Decision Tree</h2>
+<p>Ask these in order:</p>
+<p>1) <strong>Is the question about facts inside documents that can change?</strong><br />
+If yes: RAG.</p>
+<p>2) <strong>Is the problem that outputs are inconsistent, not that facts are missing?</strong><br />
+If yes: consider fine-tuning (or a prompt harness) for behavioural consistency.</p>
+<p>3) <strong>Is this a one-off or project-scoped task where you already have the right material?</strong><br />
+If yes: context injection.</p>
+<p>4) <strong>Do you need deterministic structure and mandatory sections?</strong><br />
+If yes: you need an engineering wrapper. Fine-tuning shapes tendencies; it does not enforce constraints.</p>
+<h2>Document Generation: Split Behaviour From Facts</h2>
+<p>Most “generate an architecture document” systems contain two different requirements that want two different patterns.</p>
+<p><strong>Component — Pattern</strong></p>
+<ul>
+<li><strong>Document structure and mandatory sections</strong> — Fine-tuning or codified prompting</li>
+<li><strong>Voice, conventions, and consistent framing</strong> — Fine-tuning or codified prompting</li>
+<li><strong>Project-specific integration details</strong> — Context injection</li>
+<li><strong>System-specific technical facts</strong> — Context injection</li>
+</ul>
+<p>The mistake is trying to collapse the entire problem into a single pattern.</p>
+<ul>
+<li>The structure and conventions are behavioural knowledge.</li>
+<li>The integration details are factual and must be injected per document.</li>
+</ul>
+<p>Even if you fine-tune for voice and structure, you still need a mechanism to supply the project-specific truth.</p>
+<h2>Codified Prompt Harness: A Viable Alternative to Fine-Tuning</h2>
+<p>Fine-tuning is not the only way to encode behavioural constraints.</p>
+<p>A prompt harness that captures explicit rules can achieve similar consistency, with different trade-offs:</p>
+<p><strong>Dimension — Codified prompt harness</strong></p>
+<ul>
+<li><strong>Inspectable and auditable</strong> — Yes — rules are explicit</li>
+<li><strong>Correctable without retraining</strong> — Yes — update the rule</li>
+<li><strong>Requires training data</strong> — No — built directly from standards/templates</li>
+<li><strong>Usable by non-technical staff</strong> — No — needs engineering to operate</li>
+</ul>
+<p>In many organisations, the harness is the correct first maturity step. Fine-tuning becomes the next step when you need to productionise that behaviour into a capability non-technical users can call without engineering support.</p>
+<h2>“Determinism” Is an Engineering Problem, Not a Training Problem</h2>
+<p>If you need mandatory sections, completeness, and repeatable structure, you do not get that by training alone.</p>
+<p>You get it by enforcing constraints:</p>
+<ul>
+<li>Treat the document template as a schema.</li>
+<li>Generate section-by-section, not all-at-once.</li>
+<li>Validate each section for completeness and retry thin outputs.</li>
+<li>Render the final document only after a deterministic completeness gate passes.</li>
+</ul>
+<p>Fine-tuning can help a model lean towards the right format. It cannot guarantee structure without a wrapper that checks and enforces it.</p>
+<h2>When to Fine-Tune (Definitive Guidance)</h2>
+<p>Fine-tuning is regularly proposed as a solution to problems it cannot solve. These are genuine use cases:</p>
+<ul>
+<li>Behaviour at scale: a repeatable task where prompting keeps drifting.</li>
+<li>Teaching judgement, not facts: you have many examples demonstrating the right reasoning pattern.</li>
+<li>Token economics at production scale: system prompt overhead is large and call volume is high.</li>
+<li>Non-technical accessibility: you need expert outputs without expert operators.</li>
+</ul>
+<p>Fine-tuning is not for:</p>
+<ul>
+<li>Making a model “remember” the content of your documents</li>
+<li>Replacing retrieval of specific, traceable facts</li>
+<li>Achieving deterministic output structure</li>
+<li>Situations with too few high-quality examples</li>
+</ul>
+<p>If your problem is factual, use retrieval regardless of scale.</p>
+<h2>A Pragmatic Path: From Harness to Fine-Tune</h2>
+<p>If your end state is a fine-tuned model that non-technical staff can use, the most pragmatic path is:</p>
+<ol>
+<li>Use a harness (or disciplined prompting) to produce high-quality outputs.</li>
+<li>Treat those outputs as reviewed training data — input/output pairs demonstrating correct behaviour. Do not fine-tune on the source guides and principles themselves; that is knowledge injection and carries the same recall problems described above.</li>
+<li>Fine-tune once you have enough diverse examples.</li>
+<li>Keep retrieval/context injection for project-specific facts, even after fine-tuning.</li>
+</ol>
+<p>The compounding return is that your harness becomes both:</p>
+<ul>
+<li>The current solution (usable now)</li>
+<li>The training data generator for the next solution</li>
+</ul>
+<h2>The One-Line Summary</h2>
+<p>If you remember one rule, make it this:</p>
+<p><strong>If you need facts, retrieve them. If you need behaviour, train it. If you already have the material, inject it.</strong></p>
+
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Above the Loop: How to Delegate to AI Without Losing Control</h1>
+<p>Most AI-assisted development sits at one of two extremes:</p>
+<ul>
+<li><strong>Human in the loop</strong>: the assistant writes, the human reviews every step, and progress is bounded by human attention.</li>
+<li><strong>Human out of the loop</strong>: the system runs without oversight, and you discover failures after the fact.</li>
+</ul>
+<p>There is a third position that is both more scalable and safer: <strong>human above the loop.</strong></p>
+<p>I know it works because a six-item refactor backlog ran across four AI sessions with no shared conversation history. Each session cold-started from a single anchor document, read the constraints established by sessions it never participated in, executed the next item, verified it, and updated the document for whoever came next. An interface boundary rule established in session one was still active and honoured in session four — not because any assistant remembered it, but because the document carried it explicitly.</p>
+<p>That is "above the loop" in practice.</p>
+<p>The surprising part is what happens to the human role once this works.</p>
+<p>You stop holding the system in your head.</p>
+<p>The controls become a product: contracts, triggers, and gates that both humans and assistants can load and follow. You are no longer “prompting an assistant”. You are steering a control plane that makes autonomous work safe — even when the operator (you) no longer remembers every detail of what has been encoded.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>Autonomy without durable constraints is a risk; autonomy with them is a repeatable design choice.</li>
+<li>Three control surfaces — durable contracts, hard workflow triggers, and executable gates — are what separate "above the loop" from "out of the loop."</li>
+<li>A loop that resumes from a document rather than a conversation scales across sessions, assistants, and projects.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>Engineering leads, senior engineers, and architects using AI coding assistants on production work — anyone who has felt the ceiling of the conventional model where the human reviews every output.</p>
+<h2>What you'll learn</h2>
+<ul>
+<li>Why the "human in the loop" model has a structural failure mode at scale</li>
+<li>The three control surfaces that make autonomous execution safe, not just fast</li>
+<li>How the execution loop works in practice — and how to tell when it is working</li>
+</ul>
+<h2>The Ceiling of "In the Loop"</h2>
+<p>The conventional model looks like this:</p>
+<ol>
+<li>Human asks for a change</li>
+<li>Assistant implements</li>
+<li>Human reviews and corrects</li>
+<li>Repeat</li>
+</ol>
+<p>This is useful when you are exploring. It also has a hard ceiling: the human becomes the system of record.</p>
+<p>Continuity lives in the human's head and in chat history:</p>
+<ul>
+<li>what was decided</li>
+<li>what constraints apply</li>
+<li>what was tried and rejected</li>
+</ul>
+<p>When the conversation grows long, when a different assistant joins, or when you start a fresh session, continuity degrades and the assistant works from an incomplete model of reality.</p>
+<p>That is a structural failure mode, not a tooling problem.</p>
+<h2>What "Above the Loop" Actually Means</h2>
+<p>"Above the loop" is an upstream position:</p>
+<ul>
+<li>the human sets the constraints</li>
+<li>the system enforces them</li>
+<li>the assistant executes within them</li>
+</ul>
+<p>The distinction is that judgement is applied once and then runs many times.</p>
+<p>If your constraints only exist as conversation, you are not above the loop. You are still in it — you just moved the review later.</p>
+<h2>How Direction Gets Encoded (Without You Repeating Yourself)</h2>
+<p>In practice, “above the loop” only works when direction is encoded into durable artefacts that a new session can load without chat history.</p>
+<p>These artefacts work best when they are modular: each has a clear purpose and a clear “load condition”, so a session pulls in the minimum context required rather than drowning in everything.</p>
+<p>The useful mental model is: you are not writing “documentation”. You are defining an execution contract:</p>
+<ul>
+<li>What is in scope, and what is explicitly out of scope</li>
+<li>What must not change (invariants)</li>
+<li>What evidence counts as “done” (a verification criterion)</li>
+</ul>
+<p>Once that exists, you can add two more pieces of control that make autonomy safe:</p>
+<ul>
+<li>A trigger table: when certain conditions occur, certain updates/checks become non-optional</li>
+<li>A small set of patterns/lessons: the earned constraints that stop the same failures repeating</li>
+</ul>
+<p>The encoding is deliberately layered — when one signal is missed, another catches it.</p>
+<h2>When You Stop Holding the System in Your Head</h2>
+<p>At first, “above the loop” feels like a productivity technique: fewer reviews, faster output.</p>
+<p>Over time, it becomes something else: a collaboration system whose behaviour is defined by artefacts, not by any single person’s memory.</p>
+<p>That’s not a failure. It’s the point.</p>
+<p>The risk you are escaping is slow dilution: every new session and every new assistant carries a different slice of context. If the system depends on you remembering which document to update, which check to run, or which constraint is active, it will drift.</p>
+<p>So the goal is to make the workflow legible and enforceable:</p>
+<ul>
+<li>If a constraint matters, it becomes a gate with a failure signal.</li>
+<li>If a decision matters, it becomes a durable contract, not a chat message.</li>
+<li>If a step is “don’t forget to…”, it becomes a trigger that runs every time.</li>
+</ul>
+<p>Once those mechanisms exist, you can delegate more confidently because you have moved judgement upstream. The system is designed to keep itself coherent even when a human cannot keep up with the volume of changes.</p>
+<h2>The Three Control Surfaces That Make This Work</h2>
+<p>Above-the-loop autonomy depends on three durable surfaces. Without them, you get either drift or constant human supervision.</p>
+<h3>1) Durable contracts</h3>
+<p>Work needs an entry point that defines intent and boundaries in a way any new session can load.</p>
+<p>That contract can be a PRD, a tracker, or a backlog item, but it must be explicit enough that the assistant does not have to infer what "done" means from your chat style.</p>
+<p>A well-formed contract specifies scope, constraints, and a verification criterion. A contract that says "improve the module" is not a contract. One that specifies what changes, what must not change, and how to confirm it is correct — that is a contract an assistant can execute against without prompting.</p>
+<h3>2) Hard workflow triggers</h3>
+<p>Some actions must be non-optional.</p>
+<p>If a type of change requires updating a specific document or running a specific check, encode that as a trigger in the workflow. Otherwise "we'll do it later" becomes drift.</p>
+<p>The test is simple: if you have ever said "don't forget to..." to an AI assistant, that is a trigger waiting to be written down.</p>
+<h3>3) Executable gates</h3>
+<p>This is the decisive surface.</p>
+<p>A rule without a failure signal is advisory. Advisory rules erode under task pressure.</p>
+<p>Gates enforce constraints even when:</p>
+<ul>
+<li>the session is long</li>
+<li>the assistant changes</li>
+<li>a human is not watching every step</li>
+</ul>
+<p>This is what makes autonomy safe. The assistant can move quickly because the system is designed to fail fast when something matters.</p>
+<p>One concrete example: if a change crosses an interface boundary, a contract validator fails unless the boundary contract is updated. No memory required, and no “please remember to update X” messages needed.</p>
+<p>Gates also change how the assistant reports progress.</p>
+<p>Instead of “trust me, it’s done”, the assistant can report a confidence level backed by evidence it can re-check:</p>
+<ul>
+<li>Did the verification step pass (tests, lint, contract validator)?</li>
+<li>Are there any outstanding placeholders or unknowns?</li>
+<li>Did the completion protocol update the durable artefacts it was required to update?</li>
+</ul>
+<p>That turns confidence from a vibe into a structured summary: not a promise, but a report.</p>
+<h2>The Loop: Cold Start, Execute, Verify, Hand Off</h2>
+<p>Once the control surfaces exist, the execution loop becomes simple:</p>
+<ol>
+<li>Start from a durable entry point (contract or backlog anchor)</li>
+<li>Load only the context required for the current task</li>
+<li>Execute within the inherited constraints</li>
+<li>Verify using an explicit check (tests, lint, contract validator)</li>
+<li>Update the durable state so a new session can continue without chat history</li>
+</ol>
+<p>The pattern is deliberately stateless: each task can be resumed by reading the same authoritative artefacts.</p>
+<p>The hand-off step is where most “autonomous” workflows quietly fail. The fix is to make the completion protocol explicit: when a task is done, the assistant must update the contract artefacts as part of the same unit of work (what changed, what was verified, what new constraint now applies).</p>
+<h2>What This Looks Like in Practice</h2>
+<p>The clearest way to see the model is to follow one cycle.</p>
+<p>A platform-wide code review produced a backlog of six refactor items. Four were executed by separate AI sessions — none of which shared a conversation with any other.</p>
+<p>Each session opened the anchor document. That document contained three things: a header identifying the next pending item; a checkpoint record for each completed item (what changed, at file level, and what was verified); and an accumulated constraints section — a running list of every invariant established by prior completed items.</p>
+<p>Each session read the accumulated constraints, executed the next item, ran the test suite, and updated the document — marking the item complete, writing the checkpoint, and merging any new invariants into the constraints section for the sessions that would follow.</p>
+<p>An interface boundary rule established in session one was still active in session four. Session four had never seen session one's conversation. It honoured the constraint because the document stated it plainly, in a section every session reads before it begins.</p>
+<p>The constraints survived four context resets. Not because any assistant remembered them. Because they were encoded in a document.</p>
+<p>The human's involvement across all four sessions: define the backlog, review the diffs.</p>
+<h2>Why Autonomous Doesn't Mean Uncontrolled</h2>
+<p>Autonomy without constraints is a risk.</p>
+<p>Autonomy with constraints is a design choice.</p>
+<p>The goal is not to remove the human from judgement. It is to move judgement upstream:</p>
+<ul>
+<li>from "review every output"</li>
+<li>to "design the system that makes outputs verifiable"</li>
+</ul>
+<p>The human's contribution is not reduced — it is concentrated. Every rule encoded upstream operates in every future session without the human having to repeat it. The encoding compounds; the returns scale.</p>
+<p>If you want to delegate more work without losing quality, "above the loop" is the posture that gets you there.</p>
+<p>It is not a feature of the assistant. It is a property of the system you build around it.</p>
+<h2>Limits and When Not to Use This</h2>
+<p>This model works when "done" can be verified — by tests, a lint gate, a contract validator, or a format check.</p>
+<p>It does not work for exploratory work where the requirements are not yet known. It does not replace human judgement for decisions about what to build; it scales the execution of decisions already made.</p>
+<p>It also requires an upfront investment. You need to encode enough upstream context — contracts, constraints, triggers, gates — before the loop can run without prompting. That investment is the work. The returns accumulate in every session that follows.</p>
+<p>If your workflow currently has no durable contracts and no executable gates, the first step is not to run an autonomous loop. It is to add one gate and one contract, run one cycle manually, verify it works, and extend from there. Autonomy is not switched on — it is built up incrementally, one verified cycle at a time.</p>
+
+</body>
+</html>

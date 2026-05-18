@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Analogies Are Enabling Infrastructure</h1>
+<p><em>Einstein didn’t use thought experiments to reach more people. He used them to think more precisely.</em></p>
+<p>I learned that lesson the hard way while building an agent harness: an orchestration loop that routes to tools and sources, synthesises drafts, and uses gates to decide whether to keep searching or stop.</p>
+<p>The harness could write fluent, plausible explanations and plans on demand. It could also do the wrong thing with complete confidence: optimise for wording when the real problem was missing evidence; stop early when it hadn’t actually gathered anything; “helpfully” invent structure that wasn’t in the source.</p>
+<p>What changed the trajectory wasn’t another page of instructions.
+It was a handful of analogies that conveyed intent.</p>
+<p>Not analogies as decoration.
+Analogies as infrastructure: a shared vocabulary that compresses the point of a mechanism into something an agent (and a human) can reliably act on.</p>
+<p>Most people treat analogies as a soft skill.</p>
+<p>You add an analogy when you need to explain something difficult to someone “less technical”.</p>
+<p>That framing is backwards.</p>
+<p>A good analogy is not a simplification. It’s an extraction of essence: a way of expressing the structural truth of a mechanism without dragging the reader through implementation detail.</p>
+<p>That makes analogies a form of infrastructure.</p>
+<p>Infrastructure is not glamorous, but it changes everything because it scales. A good analogy propagates through every explanation that touches the concept — across documents, across teams, and now across AI assistants that will explain your work when you are not in the room.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>Analogies are a precision tool, not a “dumbing down” tool.</li>
+<li>A canonical analogy vocabulary reduces drift across docs and across agent runs.</li>
+<li>Analogies can carry intent: they tell an agent what to optimise for, and what to treat as failure.</li>
+<li>A fluent but wrong analogy is worse than jargon; treat analogies as something you verify, not improvise.</li>
+</ul>
+<h2>Einstein’s mistake, and why it wasn’t a mistake</h2>
+<p>Einstein “rode a beam of light”.</p>
+<p>That wasn’t a popularisation for non-physicists. It was how he reasoned about relativity above the level of the maths. Translating an abstract mechanism into a human-grounded thought experiment didn’t just make the idea accessible. It forced precision of understanding that improved the physics itself.</p>
+<p>That is the first principle:</p>
+<p>If you can’t explain a concept in human terms, you probably don’t understand it deeply enough to build it reliably.</p>
+<p>Not because jargon is bad — but because jargon can hide gaps in understanding.</p>
+<h2>Analogies as intent (not explanation)</h2>
+<p>When you work with an agent harness, you’re not only writing for readers. You’re writing for a system that will make decisions when you’re not present: which sources to trust, when to keep searching, whether an answer is “good enough”, whether to prefer determinism over fluency.</p>
+<p>Analogies helped because they act like interfaces:</p>
+<ul>
+<li>stable names for recurring concepts</li>
+<li>explicit boundaries (what it covers, what it does not)</li>
+<li>a default mental model that survives across sessions, tools, and assistants</li>
+</ul>
+<p>In practice, we used analogies as a way to convey intent in a single sentence that kept working long after the immediate conversation ended.</p>
+<h2>The casual browser is the multiplier</h2>
+<p>There is a second principle that matters even more for public work.</p>
+<p>Not everyone who encounters an idea is looking for it. Some people arrive by accident: a colleague shares a post, a recommendation lands at the right moment, a conversation triggers curiosity.</p>
+<p>Those are the people who carry ideas furthest.</p>
+<p>They are not going to run your code or read your architecture diagrams. They are going to take one human-grounded insight and apply it in a different domain. That is how understanding propagates beyond the original implementation.</p>
+<p>The practical implication is uncomfortable:</p>
+<p>Writing only for experts is writing for the smallest possible audience.</p>
+<p>Experts will still find depth if it exists. The casual browser needs an entry point they can carry away.</p>
+<p>That entry point is usually an analogy.</p>
+<h2>What we actually did with them</h2>
+<p>We treated analogies as first-class artefacts, not throwaway lines.</p>
+<ol>
+<li>Picked a small set of canonical analogies and wrote them down in one place.</li>
+<li>For each analogy, stated where it holds and where it breaks.</li>
+<li>Used the analogy term deliberately in PRDs, task briefs, and reviews as a shorthand for intent.</li>
+<li>Checked that the analogy assigned responsibility correctly and didn’t hide the primary failure mode.</li>
+</ol>
+<p>The goal wasn’t “make it easier to understand”.
+The goal was “make it harder to build or accept the wrong system”.</p>
+<h2>A few examples that are doing real work</h2>
+<p>These aren’t “cute metaphors”. They’re decision tools.</p>
+<h3>The tool orchestrator as the librarian</h3>
+<p>The librarian doesn’t store the books. The librarian makes the books findable.</p>
+<p>That single sentence corrects a common category error: assuming the content producer decides how content is retrieved. In a library, the librarian decides. In a tool-orchestrated system, the orchestrator decides — dynamically, based on tool definitions.</p>
+<p>The analogy doesn’t replace the technical definition.
+It changes who you think owns the responsibility.</p>
+<h3>Retrieval-Augmented Generation (RAG) as an open-book exam</h3>
+<p>A large language model (LLM) without retrieval is sitting a closed-book exam: it answers from memory.</p>
+<p>RAG is an open-book exam: you retrieve notes and then synthesise an answer.</p>
+<p>That analogy exposes the real failure modes:</p>
+<ul>
+<li>bad notes (retrieval) produce confident wrong answers</li>
+<li>good notes with poor synthesis waste evidence</li>
+</ul>
+<p>It also makes a governance stance obvious:
+you don’t accept an answer without evidence just because it sounds fluent.</p>
+<h3>A quality gate as an editor</h3>
+<p>Before an article is published, an editor checks it against a rubric: no vague claims, proper citations, minimum substance.</p>
+<p>A quality gate does the same thing for model outputs, except it is stricter. It can’t “request a rephrase”. It can only reject and trigger more evidence gathering.</p>
+<p>That one constraint — the gate is an evidence check, not a style check — changes how you design the whole loop.</p>
+<p>The analogy makes it harder to build the wrong system.</p>
+<p>It also conveys intent to an agent cleanly:
+if the editor rejects, you don’t “write nicer”. You go back to research.</p>
+<h3>The agentic loop as a detective</h3>
+<p>A detective doesn’t stop at the first lead. They gather evidence, notice what’s missing, and decide whether they can close the case.</p>
+<p>That frame helped in two ways:</p>
+<ul>
+<li>It made iteration feel like the default, not a failure.</li>
+<li>It made premature certainty feel like a bug, not a personality trait.</li>
+</ul>
+<p>We then turned the analogy into operational constraints: bounded iteration, explicit actions (“search again”, “scan for an exact name”, “stop”), and guardrails against early exit.</p>
+<h2>The risk: fluent misinformation scales faster than jargon</h2>
+<p>Infrastructure can fail.</p>
+<p>The failure mode of analogies is not that they are “too simple”.</p>
+<p>The failure mode is that they are memorable and wrong.</p>
+<p>A fluent but inaccurate analogy spreads faster than accurate jargon because it is easier to repeat.</p>
+<p>This is why analogies need a verification posture:</p>
+<ul>
+<li>verify the analogy against the real mechanism</li>
+<li>state where it holds and where it breaks</li>
+<li>avoid inventing new analogies casually because they “sound right”</li>
+</ul>
+<p>If you can’t verify it, use the precise technical language until you can.</p>
+<h2>A practical rule</h2>
+<p>If you want a simple operational habit:</p>
+<p>When you introduce a new core concept, do not ship the explanation until you can express it in one human-grounded analogy that passes two tests:</p>
+<ol>
+<li>It assigns responsibility correctly.</li>
+<li>It doesn’t hide the primary failure mode.</li>
+</ol>
+<p>If it fails either test, it’s not infrastructure. It’s decoration.</p>
+<h2>Close</h2>
+<p>Analogies are not a way of making hard work look easy.</p>
+<p>They are a way of making hard work <em>thinkable</em> — above the level of the code — so the idea can propagate without losing its structural truth.</p>
+<p>That is infrastructure.</p>
+
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Evidence Shaping: Why “Top‑K” Is Not a Retrieval Strategy</h1>
+<p>Top‑k is not a retrieval strategy. More context often means worse answers. This is how to shape evidence — fusing, reranking, deduplicating, and ordering — before the LLM ever sees the context window.</p>
+<p>They increase <code>top_k</code>.</p>
+<p>Sometimes that helps. Often it makes answers worse: more context, less coherence, and a higher chance the model
+locks onto the wrong chunk.</p>
+<p>This article is the story of treating retrieval as an engineering pipeline, not a single parameter.</p>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
+</ul>
+<h2>Why Retrieval Isn’t Just Finding Something Relevant fails at scale</h2>
+<p>A good answer needs evidence that is:</p>
+<ul>
+<li>relevant</li>
+<li>diverse (not five near-duplicates)</li>
+<li>ordered (so the model sees the important parts in time)</li>
+<li>bounded (so you don’t drown the model in noise)</li>
+</ul>
+<p>If you only optimise “relevance”, you get brittle behaviour. If you shape evidence deliberately, you get a
+system that behaves predictably under change.</p>
+<h2>What most teams try first: Keep Raising Top‑K</h2>
+<p>Raising <code>top_k</code> is appealing because it feels safe: “we won’t miss anything”.</p>
+<p>But it creates two failure modes:</p>
+<ul>
+<li><strong>Noise inflation:</strong> the context window fills with mildly related chunks that dilute the signal</li>
+<li><strong>Ordering failures:</strong> the important chunk is present, but buried where the model never uses it</li>
+</ul>
+<p>The turning point is recognising that retrieval needs the same discipline as any data pipeline: staged
+processing with explicit decisions and guardrails.</p>
+<h2>How the solution works: A Retrieval Pipeline with Explicit Stages</h2>
+<p>A reliable query layer tends to converge on stages like:</p>
+<ol>
+<li>retrieve candidates from complementary retrievers (sparse + dense)</li>
+<li>fuse results (not “pick one”)</li>
+<li>rerank with a more expensive model when it pays for itself</li>
+<li>shape context for coherence (diversity, deduplication, ordering)</li>
+<li>synthesise with explicit sources</li>
+</ol>
+<p>The point is not the exact tools. The point is the discipline: each stage exists because a naive approach
+failed in a specific way.</p>
+<h2>Result: Answers Become Debbuggable</h2>
+<p>Once the query layer returns sources with the answer, two things change:</p>
+<ul>
+<li>disagreements become diagnosable (“the evidence was missing / wrong / out of date”)</li>
+<li>improvements become measurable (you can attribute changes to retrieval stages, not vibes)</li>
+</ul>
+<p>Proof points to capture before publishing:
+- [NEEDS_DATA: one before/after example where higher top_k made output worse]
+- [NEEDS_DATA: one concrete retrieval stage change and measurable impact, with run conditions]</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>Evidence shaping improves consistency, but it cannot recover missing or stale source material.</li>
+<li>Larger <code>top_k</code> can still be useful for exploration; the point is to shape and bound, not to forbid.</li>
+<li>Rerankers add latency; they pay for themselves only when they reduce review or retry cost.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; <code>query.use_hybrid_search=true</code>; evidence shaping via <code>query.reranker_retrieve_k</code>, <code>query.reranker_top_k</code>, <code>query.use_mmr</code>, <code>query.use_lost_in_middle</code>; token budgets <code>ollama.context_window=32k</code>, <code>ollama.num_predict</code> capped</li>
+<li>Dataset class: internal governance handbook (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>The Lesson</h2>
+<p>If your RAG system feels unreliable, don’t start by “prompting harder”.</p>
+<p>Start by treating retrieval as a pipeline:</p>
+<ul>
+<li>complementary retrievers</li>
+<li>explicit fusion</li>
+<li>deliberate context shaping</li>
+<li>sources returned as a first-class output</li>
+</ul>
+<p>That’s the path from “prototype answers” to “systems people can trust”.</p>
+
+</body>
+</html>

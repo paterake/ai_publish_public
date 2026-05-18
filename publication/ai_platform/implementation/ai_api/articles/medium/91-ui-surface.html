@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>A RAG UI That Preserves Evidence</h1>
+<p>A chat box without sources is a demo. If the UI hides evidence, trust collapses on the first challenge. This explains why citations must be a first-class UI element in any enterprise RAG system.</p>
+<p>The only usable interface is a command line.</p>
+<p>The second-most common failure is worse:</p>
+<p>The UI exists, but it hides evidence. Users see an answer, not the sources. Trust collapses the first time the
+answer is challenged.</p>
+<p>This article explains the design principle behind a simple RAG UI: the interface must preserve auditability,
+not paper over it.</p>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
+</ul>
+<h2>Why Adoption Requires a Surface fails at scale</h2>
+<p>A strong query engine is necessary. It is not sufficient.</p>
+<p>Non-technical users won’t run a Python CLI. They won’t manage profiles. They won’t inspect JSON outputs.</p>
+<p>If the system is meant to be used broadly, it needs a surface that is:</p>
+<ul>
+<li>discoverable</li>
+<li>easy to operate</li>
+<li>evidence-first</li>
+</ul>
+<h2>What most teams try first: “Just Add a Chat Box”</h2>
+<p>Adding a chat box is easy.</p>
+<p>Preserving trust is not.</p>
+<p>The naive UI shows:</p>
+<ul>
+<li>a question</li>
+<li>a fluent answer</li>
+</ul>
+<p>It does not show:</p>
+<ul>
+<li>which knowledge base was queried</li>
+<li>which sources were used</li>
+<li>what the system did when evidence was missing</li>
+</ul>
+<p>That’s a demo interface. It’s not an adoption interface.</p>
+<h2>How the solution works: Make Sources a First‑Class UI Element</h2>
+<p>The interface design is shaped by one rule:</p>
+<p>If the answer cannot be justified, it is not usable.</p>
+<p>So the UI must surface:</p>
+<ul>
+<li>the active profile (what data is being searched)</li>
+<li>the answer</li>
+<li>the citations/sources</li>
+</ul>
+<p>This also makes the system teachable: users learn what kinds of evidence exist and how queries map to sources.</p>
+<h2>Result: A UI That Enables Trust</h2>
+<p>With evidence visible, two things happen:</p>
+<ul>
+<li>users can validate answers quickly</li>
+<li>disagreements become actionable (“this source is wrong/out of date”) instead of subjective</li>
+</ul>
+<p>Proof points to capture before publishing:
+- [NEEDS_DATA: publish-safe screenshot set from a public dataset run]</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>A UI cannot compensate for a weak retrieval pipeline; evidence-first interfaces still need good evidence.</li>
+<li>Screenshots and demos must be built on public-safe datasets; do not publish internal runs.</li>
+<li>Adoption work includes onboarding and trust-building; a UI is necessary, not sufficient.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; UI loads a RAG configuration profile (vector store persist dir, inference settings, query knobs) and a query profile (collection prefixes + optional overrides)</li>
+<li>Dataset class: internal governance handbook (anonymised) for local usage; publish-safe UI screenshots should use public dataset equivalents</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+<h2>The Lesson</h2>
+<p>If you want adoption, build a surface.</p>
+<p>If you want trust, make evidence visible in that surface.</p>
+
+</body>
+</html>

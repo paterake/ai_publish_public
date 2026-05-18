@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Building an Enterprise Knowledge Base from Governance Documents</h1>
+<p>Dense-only retrieval works until it doesn’t. Sparse sections get silently excluded and you get subtly wrong answers. This is the architecture of a hybrid retrieval pipeline that treats <code>k</code> as a coverage metric rather than a quality metric, preventing exact-match entity failure.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>Hybrid retrieval works because failure modes are complementary: BM25 for exact references, dense vectors for paraphrases, then fusion and reranking for precision.</li>
+<li>Treat <code>k</code> as a coverage control, not a quality knob: too low and sections silently drop out, producing plausible but wrong answers.</li>
+<li>Ingestion decisions surface later as “RAG quality”: structured PDF extraction, table-aware chunking, and tokenisation edge cases can make or break retrieval.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You are building a RAG system over a long, structured document and you care about reliability (citations, coverage) more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>Why hybrid retrieval works in practice (and what each retriever misses)</li>
+<li>How ingestion decisions (PDF parsing, table handling) show up later as “RAG quality”</li>
+<li>Why reranker coverage is a silent failure mode (and how to reason about it)</li>
+<li>Why query expansion mode and context ordering shape what the LLM ultimately synthesises</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first operation with zero data egress</li>
+<li>A document long enough that full-context injection is not viable</li>
+</ul>
+<h2>Why the naive approach fails</h2>
+<p>A 763-page governance handbook. Dozens of policy sections. Hundreds of defined terms. The standard approach would be to dump it into an LLM's context window and let it answer questions directly. That breaks down quickly: context windows overflow, answers become unreliable for sparse sections, and there is no audit trail for which passage drove a given answer.</p>
+<p>The better framing: build a queryable knowledge base from the document. Something that can retrieve the right section for any question, synthesise a structured answer from authoritative passages, and remain inspectable. That is RAG — Retrieval-Augmented Generation.</p>
+<p>This article walks through the specific design decisions behind the ingestion and retrieval layers of a local-first RAG system built for an internal governance handbook. Everything runs locally. No data leaves the machine.</p>
+<h2>Why RAG at All?</h2>
+<p>There are two simpler alternatives, and both were considered seriously before settling on RAG.</p>
+<p><strong>Option 1: Full-document context injection.</strong> Pass the entire handbook to the LLM on every query. Fails at scale: a 763-page document exceeds safe context limits for useful synthesis, and quality degrades badly in the middle of very long contexts.</p>
+<p><strong>Option 2: Manual chunking with keyword search.</strong> Split the document by section and use keyword matching. Works for exact lookups but misses paraphrases entirely. Ask "what are the obligations around respect?" and BM25 returns nothing useful if the section header says "Respect Code" but your query says "obligations around respect".</p>
+<p>RAG solves both: chunk intelligently, embed semantically, retrieve broadly, rerank precisely.</p>
+<p><strong>A third option was considered and ruled out: agentic RAG at the ingestion layer.</strong> An agentic
+loop — where the LLM drives iterative retrieval, deciding what to fetch next based on what it
+has so far — adds flexibility for sparse or structurally ambiguous entities. But the governance
+handbook has inferrable structure: numbered sections, consistent heading hierarchy, defined
+terms with explicit glossary entries. When structure is explicit in the source, standard
+retrieval can exploit it directly without LLM-driven search loops. There is also an idempotency
+argument: LLM inference at ingestion means the same document re-ingested could produce different
+chunks, metadata, or boundaries depending on model state. Ingestion must be repeatable and
+fail-loudly — deterministic parsing guarantees that.</p>
+<p>Agentic retrieval becomes necessary when the entity being queried is sparse or structurally
+implicit — which is precisely the problem Article 3 addresses. The boundary between standard
+RAG (Article 2) and agentic RAG (Article 3) is not arbitrary: it is drawn at the point where
+the structure of the source document stops being exploitable by deterministic means.</p>
+<h2>Ingestion: Getting the Chunks Right</h2>
+<p>The governance handbook arrives as a PDF. The first engineering challenge is extracting structured text from it without mangling tables, headers, and numbered paragraphs.</p>
+<h3>Docling for Structured PDF Extraction</h3>
+<p>Getting structured, reliable text out of a governance PDF was not a one-step decision. Three tools were tried in sequence, each rejected when retrieval quality exposed the failure.</p>
+<p><strong>Iteration 1 — pypdf.</strong> Standard linear text extraction. Fast and simple. The definitions section — a large table of terms and meanings — collapsed into continuous text: header, definition, and clause markers merged into a single unbroken stream. Downstream enrichment pipelines running against chunks built from this extraction returned fragments that looked plausible but contained merged or mis-ordered content. Entity definitions sourced from that section were unreliable.</p>
+<p><strong>Iteration 2 — PyMuPDF4LLM.</strong> Better Markdown-style output, significantly faster. Large tables still fragmented across chunks — cell content split mid-row for dense sections. The problem was less severe but not solved. The definitions table still could not be used reliably as a retrieval source.</p>
+<p><strong>Iteration 3 — Docling.</strong> Layout-aware, deep-learning-based parsing. Table structure preserved as pipe-delimited Markdown. Section boundaries detected structurally. A formal comparison was run across all three tools specifically measuring definition table preservation — Docling was selected.</p>
+<p>The trade-off accepted: Docling parses a full handbook in ~250s versus seconds for the alternatives. This is mitigated by the section-split cache — Docling runs once per source version; subsequent re-ingestions skip conversion entirely.</p>
+<pre><code class="language-yaml">preprocessor:
+  type: DoclingPreprocessor
+  section_cache_dir: &lt;cache_dir&gt;
+</code></pre>
+<p>The cache check runs first on every pipeline start. If the cache exists, Docling is skipped entirely. The extraction cost is paid once per source version.</p>
+<p>This is the cache-at-the-boundary principle applied consistently across the platform: every
+expensive operation at an external boundary — PDF parsing, embedding calls, LLM synthesis —
+pays its cost exactly once per unique input. Docling is the clearest example because the cost
+is visible (minutes, not milliseconds), but the same discipline applies to embeddings: chunks
+are embedded once at ingestion and stored in ChromaDB; they are never re-embedded at query time.
+The boundary is where variance and cost enter the system. Caching there eliminates repeated
+cost at no quality penalty.</p>
+<h3>Splitting: Prose and Tables Are Different Problems</h3>
+<p>Standard sentence splitters treat all text the same. That works for paragraphs but fails badly for tables. A governance document contains dozens of rule tables — structured grids of obligations, categories, and sanctions. Splitting a table by sentence produces chunks that lose all column context.</p>
+<p><code>TableAwareSentenceSplitter</code> handles them separately:</p>
+<ul>
+<li><strong>Prose</strong>: standard sentence splitting at <code>chunk_size=256 tokens</code>, <code>chunk_overlap=32</code></li>
+<li><strong>Tables</strong>: each row becomes its own chunk at <code>chunk_size=512</code>; header row is prepended to every data-row chunk for context</li>
+</ul>
+<p>The overlap value is deliberate. Without overlap, a sentence split at a chunk boundary loses
+context on both sides: the chunk ending mid-clause has no resolution, and the chunk starting
+mid-thought has no setup. At <code>chunk_overlap=32</code>, enough tokens carry across the boundary to
+preserve a defined term or a clause reference — the things that matter most in governance text.
+32 was chosen as the minimum overlap that eliminated boundary-split failures in testing without
+meaningfully increasing chunk count or storage.</p>
+<p>There is one critical edge case: the Markdown separator row (<code>|---|---|</code>). Every character in that row tokenises separately under BERT tokenisation. A row with 10 columns produces a chunk that is almost entirely separator characters — each one a token. Passed to Ollama's embedding API, it triggers an <code>HTTP 400</code> (chunk too long, token limit exceeded). The splitter explicitly detects and skips separator rows:</p>
+<pre><code class="language-python">def _is_separator_row(self, line: str) -&gt; bool:
+    return bool(re.match(r'^\|[\s\-|]+\|$', line.strip()))
+</code></pre>
+<p>Skipping this was not obvious. The failure mode (HTTP 400 from the embedding endpoint) looks like a network error at first glance. The root cause is tokenisation, not the request itself.</p>
+<h3>What Goes Where</h3>
+<p>After splitting, chunks are stored in two parallel stores:</p>
+<p><strong>Store — Purpose</strong></p>
+<ul>
+<li><strong><em>*ChromaDB</em></strong>* — Dense vector retrieval — 44 collections, one per document section</li>
+<li><strong><em>*DocStore</em>* (SimpleDocumentStore)</strong> — Sparse/BM25 retrieval — same chunks, different index</li>
+</ul>
+<p>The final result: <strong>44 collections, approximately 1,726 chunks</strong> across the full handbook.</p>
+<h2>Query Expansion: One Query or Many?</h2>
+<p>Before retrieval runs, the pipeline decides how many query variants to use.</p>
+<p>For <strong>batch runs</strong> — the catalog enrichment pipeline covered in Article 3 — <code>num_queries=1</code>. The
+query passes through as-is. This is deliberate: batch runs process hundreds of entities and must
+be deterministic and reproducible. LLM-generated query variants introduce model-state dependency
+— the same entity re-run could expand differently, producing different retrieval paths and
+different enrichment outputs. Reproducibility is not optional in a quality-gated pipeline.</p>
+<p>For <strong>interactive queries</strong> — the agent and API surfaces built on this pipeline — <code>num_queries=3</code>.
+The LLM generates two additional phrasings before retrieval runs. A user asking about a concept
+in one form benefits from variant phrasings that may match sections the original query misses.
+In an interactive context, the marginal non-determinism is acceptable; in a batch catalog run,
+it is not.</p>
+<p>The distinction is not cosmetic. Every downstream consumer of this pipeline inherits one of
+these two modes, and the choice shapes whether outputs are reproducible.</p>
+<h2>Why Hybrid Retrieval?</h2>
+<p>Once chunks are stored, the retrieval question is: how do you find the right ones?</p>
+<p>Dense vector search works by embedding the query and measuring cosine similarity against stored chunk embeddings. It handles paraphrases and semantic similarity well. It struggles with exact term matching — rule references, specific numbered clauses, defined terms.</p>
+<p>BM25 is classic term frequency retrieval. It handles exact matches and rare terms well. It fails completely on paraphrases: if the query uses a synonym, BM25 returns nothing.</p>
+<p>Here is what that looks like in practice. Ask for an exact reference (“Rule 43”). Dense-only retrieval returns a thematically related clause, not the numbered rule. The answer reads plausibly, but the cited passage is wrong — and unless you inspect citations, you will not notice.</p>
+<p>These failure modes are complementary, which is why hybrid retrieval works.</p>
+<p><strong>What BM25 catches that dense vector misses:</strong>
+- Exact rule references: "Rule 43", "Section 7.3"
+- Rare defined acronyms: short programme names that appear infrequently (no semantic neighbourhood)
+- Table entries: structured cells with specific values</p>
+<p><strong>What dense vector catches that BM25 misses:</strong>
+- Paraphrases: "obligations around respect" → retrieves "Respect Code" section
+- Topic synonyms: "financial fair play" → retrieves "sustainability regulations"
+- Questions about concepts not named in the chunk: "what happens if a department overspends?" → retrieves budget rule section without matching "overspend"</p>
+<h3>Reciprocal Rank Fusion</h3>
+<p>The two retrievers are fused using Reciprocal Rank Fusion (RRF). Each retriever ranks its results independently. RRF combines the rankings: <code>RRF_score(d) = Σ 1 / (k + rank_i(d))</code>, where <code>k=60</code> dampens the influence of very high ranks. A document that appears in the top 10 of both retrievers scores higher than one that appears at rank 1 in only one. This rewards consistent relevance across retrieval methods, not just peak performance in one.</p>
+<h2>The Reranker: From Broad Retrieval to Precise Selection</h2>
+<p>After fusion, the combined candidate set is larger than what should be sent to the LLM. The reranker's job is to score each candidate for relevance to the original query and select the top K.</p>
+<p>Two reranker options were evaluated:</p>
+<p><strong>Approach — How It Works — Trade-off</strong></p>
+<ul>
+<li><strong><em>*Embedding cosine similarity</em></strong>* — Re-embed query + chunk, compute cosine — Fast, same embedding model, symmetric</li>
+<li><strong><em>*Cross-encoder</em></strong>* — Fine-tuned model scores query+chunk jointly — More accurate, separate model, slower</li>
+</ul>
+<p>The choice was embedding cosine. Reasons:
+1. The same local embedding model is already running. No additional model to manage.
+2. Cross-encoders require separate deployment and add additional latency to the retrieval path.
+3. For governance text with long, well-structured sections, embedding cosine proved sufficient in testing.</p>
+<h3>The k=24 Failure</h3>
+<p>The first production configuration used <code>reranker_retrieve_k=24</code> — retrieve 24 candidates for the reranker to score.</p>
+<p>A specific query exposed the problem: queries about regional obligations kept returning generic rules instead of the correct short compliance section.</p>
+<p>Root cause: the correct section is short and densely formatted. Its chunks had lower BM25 frequency scores (few of the query terms appeared frequently within the section) and marginally lower vector similarity scores than longer, more verbose sections. At k=24, the correct chunks consistently ranked 25th or lower — just outside the window.</p>
+<p>Raising to <code>reranker_retrieve_k=88</code> fixed it. The rationale: 44 collections × 2 sections per collection average = ~88 candidates needed to guarantee at least one representative from each section reaches the reranker.</p>
+<p>The lesson: reranker retrieve_k is not a quality knob — it is a coverage knob. Setting it too low silently excludes sparse but correct sections. You will not see an error; you will see plausible answers citing the wrong sources.</p>
+<h3>Context Ordering: Where Chunks Land in the Window</h3>
+<p>After reranking, there is one more step before chunks reach the LLM: reordering them within
+the context window.</p>
+<p>LLMs do not attend uniformly across their context. Empirically, models attend better to content
+at the start and end of the context window than to content in the middle — the "lost-in-the-middle"
+effect. A chunk ranked second by the reranker that lands mid-context in a 32k window may
+contribute less to synthesis than its score implies.</p>
+<p>The fix is mechanical: place the highest-scored chunks at the start and end of the assembled
+context, lower-scored chunks in the middle. The reranker ordering is preserved for selection;
+only the assembly order changes for attention.</p>
+<pre><code class="language-yaml">llm:
+  use_lost_in_middle: true
+</code></pre>
+<p>For governance text — long sections, multi-passage synthesis tasks — this reordering measurably
+improves answer coherence for queries where the most relevant evidence would otherwise land
+mid-context.</p>
+<h2>LLM Synthesis</h2>
+<p>After reranking, the top K chunks are passed to the LLM with a structured synthesis prompt. The LLM's job is not to retrieve — that is done. Its job is to synthesise a coherent, cited answer from the provided passages.</p>
+<p>Key synthesis config:</p>
+<pre><code class="language-yaml">llm:
+  model: &quot;&lt;local_llm_model&gt;&quot;
+  context_window: 32768
+  num_predict: 700
+  thinking: false
+</code></pre>
+<p><code>thinking: false</code> is critical for models that emit internal reasoning blocks by default. Without it, the model prefixes its response with extended <code>&lt;think&gt;</code> blocks. Those blocks consume <code>num_predict</code> tokens. The actual answer never arrives — the caller returns "Empty Response". This is not a timeout; it is a budget exhaustion at the generation level.</p>
+<p>The synthesis prompt always includes two glossary sections as preamble. Prepending them ensures the LLM has authoritative definitions for terms in scope, regardless of which sections the retriever returns.</p>
+<h2>Results</h2>
+<p><strong>Metric — Value</strong></p>
+<ul>
+<li><strong>Collections</strong> — 44</li>
+<li><strong>Total chunks</strong> — ~1,726</li>
+<li><strong>Ingestion time</strong> — ~250s (Docling, cached after first run)</li>
+<li><strong>Embedding model</strong> — local embeddings (on-device)</li>
+<li><strong>Synthesis model</strong> — local inference (on-device)</li>
+<li><strong>Context window</strong> — 32,768 tokens</li>
+<li><strong>Data egress</strong> — None</li>
+</ul>
+<p>The system handles queries across the full governance document, with section-level attribution for every answer.</p>
+<h2>Architecture Decisions Summary</h2>
+<p><strong>Decision — Alternative Considered — Why This</strong></p>
+<ul>
+<li><strong>Docling for PDF extraction</strong> — pypdf, PyMuPDF4LLM — Layout-aware parsing preserves table structure; pypdf/PyMuPDF fragmented definition tables</li>
+<li><strong>TableAwareSentenceSplitter</strong> — Standard sentence splitter — Tables need row-level chunking, not sentence splitting</li>
+<li><strong>chunk_overlap=32</strong> — No overlap — Overlap carries defined terms and clause references across chunk boundaries</li>
+<li><strong>Hybrid BM25 + dense vector</strong> — Dense-only — BM25 covers exact terms/rules that vector misses</li>
+<li><strong>RRF fusion</strong> — Score averaging — Rewards consistent relevance, not single-retriever peak</li>
+<li><strong>Embedding cosine reranker</strong> — Cross-encoder — Same model already running; cross-encoder adds deployment cost</li>
+<li><strong>reranker_retrieve_k=88</strong> — k=24 (initial) — k=24 silently excluded sparse sections (found via Section 40 failure)</li>
+<li><strong>num_queries=1 (batch) / 3 (interactive)</strong> — Fixed single query — Batch requires determinism and reproducibility; interactive trades it for broader recall</li>
+<li><strong>Lost-in-middle context reorder</strong> — Preserve reranker order — LLMs attend better at context boundaries; reordering places best evidence where the model uses it</li>
+<li><strong>Local embedding + synthesis</strong> — Cloud APIs — Fully local, no API cost, no data egress</li>
+<li><strong>44 ChromaDB collections (one per section)</strong> — Single collection — Per-section indexing enables section-targeted retrieval</li>
+</ul>
+<h2>What This Enables</h2>
+<p>This infrastructure layer is the shared substrate for three downstream consumers: the
+quality-gated agentic retriever (Article 3), the MCP tool surface, and the HTTP agent interface.
+All three query the same hybrid index, use the same reranking pipeline, and inherit the same
+context ordering. Getting this layer right is what makes everything built on top of it reliable.</p>
+<p>The retrieval pipeline produces chunks accurate enough that the quality gate (Article 3) rejects
+only ~15–30% of entities on the first pass. The hybrid approach means exact rule references,
+semantic paraphrases, and table-structured data all retrieve correctly from the same index.
+The batch/interactive query expansion split means the catalog pipeline is deterministic and
+the agent surfaces are responsive — from the same underlying engine.</p>
+<p>The full stack runs locally on a laptop. No cloud. No API key. No data egress.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li><code>reranker_retrieve_k</code> is a coverage knob; the right value depends on corpus structure and chunking strategy.</li>
+<li>PDF parsing and table handling are workload-dependent; layout-heavy sources can still require manual fixes.</li>
+<li>Hybrid retrieval improves recall, but it does not guarantee truth; you still need sources and explicit “not found” behaviour.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; 44 collections (~1,726 chunks); <code>reranker_retrieve_k=88</code>; context window 32k; local inference</li>
+<li>Dataset class: internal governance handbook (anonymised; no client identifiers)</li>
+<li>Non-reproducible from this article: exact prompts and internal contracts</li>
+</ul>
+<p><em>The code for this system is part of a local-first AI platform for enterprise governance knowledge. The next article covers the quality-gated agentic retrieval layer built on top of this infrastructure.</em></p>
+
+</body>
+</html>

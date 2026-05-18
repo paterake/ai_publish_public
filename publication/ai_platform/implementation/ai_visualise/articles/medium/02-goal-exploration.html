@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Goal Exploration: Why LLM Visualisation Should Start with Hypotheses</h1>
+<p><strong>Series:</strong> LLM-Driven Data Visualisation — Part 2 of 7</p>
+<p>Most AI chart tools go straight to: “pick a chart”. That produces plausible visuals with no analytical stake. This is why you must force the LLM to generate hypotheses first, committing to analytical intent before it is allowed to plan a single chart.</p>
+<h2>Who this is for</h2>
+<p>You are experimenting with LLM-driven charting and you want results that feel like analysis, not a generic chart gallery.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>Why “pick a chart” is the wrong first step</li>
+<li>How forcing hypotheses up front reduces randomness and improves relevance</li>
+<li>How to keep this process auditable and bounded</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>The model must commit to analytical intent before generating chart specs</li>
+<li>Outputs must be explainable (hypotheses → chosen charts), not just rendered</li>
+</ul>
+<p>Most "AI visualisation" tools ask the model one question: what chart should I draw?</p>
+<p>The model returns a chart type. You get a bar chart. It is probably correct. It is almost certainly generic.</p>
+<p>The problem is not the chart. The problem is that the model went straight to output without doing any analytical work. It did not ask what question the data should answer, which relationships were worth investigating, or whether the proposed chart would actually surface something useful. It just picked a bar chart because bar charts are common.</p>
+<p>This article shows a different approach: making the LLM write an analysis brief before it touches a single chart spec. The pattern is called Goal Exploration, and it is the mechanism that produces targeted analysis rather than a chart buffet.</p>
+<h2>What most implementations skip</h2>
+<p>The standard pattern for AI-driven visualisation is:</p>
+<ol>
+<li>Send dataset description (or raw data) to LLM</li>
+<li>Ask: "what charts should I create?"</li>
+<li>Receive list of chart suggestions</li>
+<li>Render them</li>
+</ol>
+<p>The failure mode is subtle. When you ask "what charts should I create?", you are asking the model to produce output immediately. It skips the step where a competent analyst would ask: "what am I actually trying to understand?" The model has no stake in the analytical question — it just generates plausible-looking charts.</p>
+<p>For a six-column weather dataset, plausible-looking means: a temperature trend, a precipitation bar chart, a wind speed summary. Not wrong, but not interesting. An analyst with domain knowledge would ask: does precipitation correlate with temperature range? Is there a seasonal pattern to the wind? Which weather type contributes most to total precipitation?</p>
+<p>Those are hypotheses — statements about what might be true — and they produce more targeted, more insightful charts.</p>
+<h2>Goal Exploration: commit to intent before planning charts</h2>
+<p>In the platform’s visualisation module (called <code>ai_visualise</code> in this codebase), when <code>mode: infer_visualisations</code> is set, the pipeline runs a Goal Exploration step before any chart is planned.</p>
+<p>The LLM receives a compact statistical summary of the dataset — column types, cardinalities, null rates, value distributions, date ranges. It does not receive raw rows.</p>
+<p>It is then asked to generate 3-5 analytical goals and hypotheses: specific questions this dataset could answer, areas of variance worth investigating, and relationships between columns likely to surface insights. It must commit to these hypotheses explicitly before designing any charts.</p>
+<p>This is the compact statistical summary the LLM sees for the Seattle weather dataset (1,461 rows, 6 columns, 2012-2015):</p>
+<ul>
+<li><strong>date</strong> — temporal; 1,461 unique values; 2012-01-01 to 2015-12-31</li>
+<li><strong>precipitation</strong> — numeric; range 0.0–55.9 mm; mean 3.03; std 6.68</li>
+<li><strong>temp_max</strong> — numeric; range −1.6–35.6 °C; mean 16.4</li>
+<li><strong>temp_min</strong> — numeric; range −7.1–18.3 °C; mean 8.2</li>
+<li><strong>wind</strong> — numeric; range 0.4–9.1 m/s; mean 3.03</li>
+<li><strong>weather</strong> — categorical; 5 values: drizzle, sun, rain, fog, snow</li>
+</ul>
+<p>[NEEDS_DATA: actual LLM-generated Goal Exploration output — the 3-5 hypotheses the model generated for the Seattle weather run on 2026-04-10]</p>
+<p>From those hypotheses, the LLM then plans one chart per hypothesis: transformation spec (filter, group-by, aggregate, sort), chart type, Vega-Lite mark, insight statement, narrative, and recommended action. The hypotheses constrain the chart planning — you cannot draw a chart that does not address a stated hypothesis.</p>
+<h2>The result: what the Seattle weather run produced</h2>
+<p>Running the pipeline against the Seattle weather dataset (public, 1,461 rows, 6 columns, 2012-2015) on 2026-04-10 produced five charts in 6 minutes 28 seconds, with 6 LLM calls and 0 failures:</p>
+<ul>
+<li><strong>Seattle temperature trends (2012-2015)</strong> — temporal line chart</li>
+<li><strong>Seasonal weather composition</strong> — normalised stacked bar by month</li>
+<li><strong>Precipitation vs temperature range</strong> — scatter or relationship chart</li>
+<li><strong>Precipitation distribution</strong> — histogram with distribution profile</li>
+<li><strong>Wind speed by weather type</strong> — bar/box by weather category</li>
+</ul>
+<p>Each chart addresses a distinct analytical question. Compare that to the "plausible but generic" set you would get from asking "what charts should I draw?" — which almost always returns the same three or four chart types regardless of dataset.</p>
+<pre><code class="language-yaml">inference:
+  top_k: 5
+  enable_self_critique: true
+  llm:
+    provider: &quot;ollama&quot;
+    model: &quot;qwen3.5:9b&quot;
+    temperature: 0.1
+    max_tokens: 2500
+  prompt: |
+    Create a publication-quality analysis pack explaining seasonality,
+    precipitation patterns, and temperature trends in Seattle weather.
+</code></pre>
+<p><code>enable_self_critique: true</code> adds one additional LLM call after planning. The model reviews its own plan for chart quality, correct aggregation, and narrative usefulness before any chart is rendered. This is covered in detail in Part 4.</p>
+<h2>Why this reduces hallucination</h2>
+<p>There is a secondary benefit to Goal Exploration that is not immediately obvious: it reduces column hallucination.</p>
+<p>When the LLM plans charts directly, it occasionally invents column names — it "remembers" that datasets like this one often have a <code>season</code> column or a <code>month_name</code> derived field, and it proposes charts based on that memory rather than the actual schema. When those charts hit the validation layer, they fail with a column reference error.</p>
+<p>When the LLM writes hypotheses first, it is forced to reason from the actual column list in the summary — <code>date</code>, <code>precipitation</code>, <code>temp_max</code>, <code>temp_min</code>, <code>wind</code>, <code>weather</code> — before making any column references. It cannot hallucinate a column that was not in the summary it just processed.</p>
+<p>This is not a perfect defence. But it reduces the frequency of column reference failures, which directly reduces the number of LLM repair calls the pipeline needs to make.</p>
+<h2>The cost</h2>
+<p>Goal Exploration adds one LLM call per run. For the Seattle weather run: 6 total LLM calls across goal exploration, chart planning (5 charts), and self-critique. At local Ollama inference rates, <code>cost_gbp_est: 0.0</code>. For cloud-hosted models, this would add one inference call per pipeline run — a manageable cost for the quality improvement.</p>
+<p>The total wall time of 6m28s includes goal exploration, planning, self-critique, and Vega-Lite rendering for all five charts. Goal exploration adds approximately one LLM call's latency — roughly 30-60 seconds at local inference speeds.</p>
+<p>[NEEDS_DATA: per-stage timing breakdown from a run with Goal Exploration enabled — goal exploration time vs planning time vs render time]</p>
+<h2>The lesson</h2>
+<p>Making the LLM commit to analytical intent before producing output is not a UX feature. It is a reliability pattern.</p>
+<p>A model that is forced to ask "what is worth investigating?" before "what should I draw?" produces charts that address questions worth asking. A model that skips straight to chart output produces charts that are plausible but undirected.</p>
+<p>The same principle applies to any AI system that produces artefacts: require the model to state its intent before you accept its output. What the model says it is trying to do and what it produces should be verifiable against each other.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>Hypothesis-first workflows trade breadth for relevance; they can miss surprises that only broad exploration finds.</li>
+<li>If the input summary is poor, hypothesis quality collapses; the system needs a reliable data summariser.</li>
+<li>Treat timings as workload-dependent; model choice and validation gates change runtime.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; [NEEDS_DATA: dataset used (public), model settings affecting timing]</li>
+<li>Dataset class: public tabular dataset (publish-safe)</li>
+<li>Non-reproducible from this article: client-specific reporting packs and internal datasets</li>
+</ul>
+
+</body>
+</html>

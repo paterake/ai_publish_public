@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The AI That Builds Your System Is Not the AI That Runs Inside It</h1>
+<p><em>Same model, two roles — and a governance category error that quietly breaks both</em></p>
+<p>I use AI in two places at once.</p>
+<p>One AI helps me build the system: it reads requirements, proposes code changes, and refactors modules.</p>
+<p>Another AI runs <em>inside</em> the system: it classifies, retrieves, scores, and decides whether the evidence is good enough to proceed.</p>
+<p>In many projects those two things get blurred into one phrase: “we’re using AI”.</p>
+<p>That blur creates a category error.</p>
+<p>The governance you need for a coding assistant is not the governance you need for a production pipeline model. If you apply the wrong discipline to the wrong role, you get one of two outcomes:</p>
+<ul>
+<li>You add ceremony to development and still miss real production risks.</li>
+<li>Or you accept “assistant-style” looseness in a pipeline and wake up to silent wrong answers.</li>
+</ul>
+<p><strong>Credibility signal:</strong> In this setup, the same local model (Qwen3.5:9b) can play both roles. What changes is not the model. It’s the governance around it.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>“AI” is not a single thing. Role determines the failure modes, and failure modes determine governance.</li>
+<li>Developer AI is interactive and human-adjudicated; worker AI is batch, unattended, and must be bounded.</li>
+<li>The safest systems treat governance as a control surface you apply to a role, not a property of a model.</li>
+</ul>
+<h2>A simple distinction that changes everything</h2>
+<p>Most teams treat “using AI” as a technology choice. In practice it’s a <em>control choice</em>.</p>
+<p>There are two roles:</p>
+<p><strong>Developer AI</strong> — writes and changes the system
+- Interaction: one turn at a time
+- Human in the loop: always
+- Primary failure mode: bad suggestion — visible
+- Governed by: session contracts + review gates</p>
+<p><strong>Worker AI</strong> — runs inside the system
+- Interaction: loops in a pipeline
+- Human in the loop: rarely
+- Primary failure mode: silent wrong output — invisible
+- Governed by: budgets + observability + degrade modes</p>
+<p>The trap is assuming that because both are “LLMs”, they should be governed the same way.</p>
+<p>They shouldn’t.</p>
+<h2>The developer AI: the point is not correctness, it’s controllability</h2>
+<p>A coding assistant is allowed to be wrong in a way production systems are not.</p>
+<p>That is not because the stakes are lower. It’s because the <em>control loop</em> is different:</p>
+<ul>
+<li>A developer AI proposes.</li>
+<li>A human adjudicates.</li>
+<li>The codebase’s tests and hooks enforce deterministic guardrails.</li>
+</ul>
+<p>The safety property doesn’t come from the assistant “being careful”. It comes from the fact that the assistant cannot ship anything without passing through multiple deterministic gates.</p>
+<p>Here’s a concrete example of a gate that matters more than any prompt:</p>
+<ul>
+<li>If a command looks like a push to the default branch, the session defers and requires human approval.</li>
+</ul>
+<p>That is governance as executable policy.</p>
+<p>It doesn’t need the assistant to remember a rule.
+It doesn’t need the assistant to “agree”.
+It makes a dangerous action structurally harder than a safe one.</p>
+<p>Most “AI governance” discussions skip this point. They focus on behaviour. In practice, safety comes from <em>enforcement surfaces</em>.</p>
+<h2>The worker AI: the point is not intelligence, it’s bounded execution</h2>
+<p>When a model runs inside a pipeline, your biggest risk is not that it produces a low-quality paragraph.</p>
+<p>Your biggest risk is that it behaves like an unbounded subsystem:</p>
+<ul>
+<li>retries forever</li>
+<li>times out invisibly</li>
+<li>returns an empty answer that looks like a legitimate “not found”</li>
+<li>burns budget without producing evidence</li>
+</ul>
+<p>The defining difference is unattended execution. The worker AI runs when nobody is watching.</p>
+<p>That changes the non-negotiables:</p>
+<ul>
+<li>Every call must have a time budget.</li>
+<li>Every run must have a correlation ID.</li>
+<li>Every failure must degrade predictably.</li>
+<li>Every output must be validated against a contract.</li>
+</ul>
+<p>This is not “LLM safety” as ethics. It’s LLM safety as systems engineering.</p>
+<p>If you have ever debugged a distributed job that “completed successfully” but produced nonsense, you already understand the point: the failure mode that kills you is the one that looks like success.</p>
+<p>In a pipeline, a confident wrong answer is worse than an explicit error.</p>
+<p>So the governance posture flips:</p>
+<ul>
+<li>Developer AI is allowed to be creative because it is constrained by review.</li>
+<li>Worker AI must be boring because it is constrained only by the system you build around it.</li>
+</ul>
+<h2>The non-obvious case: one model, two governance regimes</h2>
+<p>Using the same model for both roles makes the distinction impossible to ignore.</p>
+<p>If the same weights can be:</p>
+<ul>
+<li>an interactive coding partner in one context, and</li>
+<li>an unattended decision-maker in another,</li>
+</ul>
+<p>then “model choice” cannot be the core governance decision.</p>
+<p>The governance decision is: what role is the model playing right now, and what controls apply to that role?</p>
+<p>This is why I treat governance as a stack:</p>
+<ol>
+<li><strong>Model</strong> — the underlying capability</li>
+<li><strong>Harness</strong> — skills, rules, hooks, session constraints for developer AI</li>
+<li><strong>LLMOps</strong> — budgets, observability, degrade modes, validation for worker AI</li>
+</ol>
+<p>The mistake is investing heavily in layer 2 and assuming you’ve solved layer 3 as a by-product.</p>
+<p>You haven’t.</p>
+<p>They solve different problems.</p>
+<h2>The category error in the wild</h2>
+<p>Once you see it, you start noticing it everywhere:</p>
+<h3>1) Bringing production ceremony into development</h3>
+<p>Teams require detailed telemetry, change tickets, or heavyweight approval processes for every assistant-generated diff.</p>
+<p>The result is predictable:</p>
+<ul>
+<li>the assistant becomes too slow to use</li>
+<li>engineers bypass the process</li>
+<li>the “governance” becomes theatre</li>
+</ul>
+<p>The right control surface for developer AI is not bureaucracy.
+It’s fast deterministic gates: formatters, linters, tests, and “no-go” hooks for dangerous actions.</p>
+<h3>2) Bringing assistant permissiveness into production</h3>
+<p>Teams allow a pipeline LLM to “just try again” or “produce something useful” when evidence is missing.</p>
+<p>That feels helpful in an interactive assistant.
+In production it’s a liability.</p>
+<p>If the system cannot find evidence, it must say so explicitly and degrade cleanly. Otherwise you are training your downstream consumers to trust outputs that were generated in the absence of supporting facts.</p>
+<h2>A practical way to operationalise the distinction</h2>
+<p>If you want a simple, actionable test:</p>
+<p>Ask one question.</p>
+<p><strong>When this output is wrong, who catches it first?</strong></p>
+<ul>
+<li>If the answer is “a human reviewer in the same session”, you are in developer-AI territory. Optimise for throughput and controllability.</li>
+<li>If the answer is “a downstream user, a customer, or a dashboard three days later”, you are in worker-AI territory. Optimise for bounded execution, observability, and explicit failure.</li>
+</ul>
+<p>That question forces you to name the control loop. Once you name it, the governance follows.</p>
+<h2>Close</h2>
+<p>The interesting question is no longer “are you using AI?”</p>
+<p>The question that matters is:</p>
+<p><strong>which role is the AI playing, and what governance regime applies to that role?</strong></p>
+<p>Treating governance as role-based is how you avoid both extremes: development slowed by ceremony, and production destabilised by assistant-style looseness.</p>
+
+</body>
+</html>

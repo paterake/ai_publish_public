@@ -1,0 +1,5 @@
+- Artificial Intelligence
+- Software Architecture
+- Machine Learning
+- Information Retrieval
+- Enterprise Architecture

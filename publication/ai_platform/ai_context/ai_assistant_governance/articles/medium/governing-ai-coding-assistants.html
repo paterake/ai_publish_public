@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Governing AI Coding Assistants: How to Make Delegation Repeatable</h1>
+<p>Most teams try to govern AI coding assistants by writing better prompts.</p>
+<p>That works until the work spans multiple sessions, multiple assistants, or multiple people. Then the dominant failure mode isn’t “the assistant didn’t understand”. It’s that the system has no durable control surface.</p>
+<p>This article is about governing AI-assisted development as an engineering system: contracts, constitution, procedures, and gates.</p>
+<p>The goal is not to reduce what the assistant can do. The goal is to make autonomy safe, repeatable, and portable across tools and sessions.</p>
+<h2>The Operating Contract: Human ↔ Assistant</h2>
+<p>If you want to delegate more than toy tasks, the roles must be explicit:</p>
+<ul>
+<li><strong>Human role</strong>: define the problem, provide domain context and data, run commands when needed, and make acceptance decisions</li>
+<li><strong>Assistant role</strong>: design and implement changes that satisfy the contracts and repo standards</li>
+</ul>
+<p>The trick is the enforcement mechanism:</p>
+<blockquote>
+<p>The assistant does not “stay correct” by remembering. It stays correct by passing gates.</p>
+</blockquote>
+<p>This is what makes the model portable. If you switch assistants, you are not switching the rules. You are switching the executor.</p>
+<h2>The Four-Part Model: Contracts + Constitution + Procedures + Gates</h2>
+<p>Think of governance as four layers, each with a different responsibility.</p>
+<h3>1) Contracts (module-level)</h3>
+<p>Each module needs a clear entry point contract.</p>
+<p>The contract should be sufficient for an assistant to implement or modify the module without relying on long chat history. It defines intent, scope, boundaries, and what “done” looks like.</p>
+<p>The contract should not be a copy of the implementation. If the contract becomes “whatever the code currently does”, you’ve lost governance.</p>
+<h3>2) Constitution (repo-level)</h3>
+<p>Cross-cutting rules must live in one place.</p>
+<p>If you scatter core rules across PRDs, you guarantee drift: different modules will encode different eras of the same principle.</p>
+<p>The constitution is where you keep:</p>
+<ul>
+<li>the non-negotiable pillars</li>
+<li>boundary rules (what belongs where)</li>
+<li>workflow triggers (what must be updated when)</li>
+<li>quality and publication standards</li>
+</ul>
+<h3>3) Procedures (repeatable)</h3>
+<p>Procedures exist to avoid “go and remember how we do this”.</p>
+<p>If a check must happen every time, encode it as a repeatable workflow: what to read, what to update, what order to do it in.</p>
+<p>Procedures reduce the cognitive load on both the human and the assistant. The goal is consistent execution.</p>
+<h3>4) Gates (automated)</h3>
+<p>This is what makes the system self-correcting.</p>
+<p>A governance rule without a failure signal is advisory. Advisory rules fail under task pressure.</p>
+<p>Gates turn your governance into constraints:</p>
+<ul>
+<li>the build fails when drift appears</li>
+<li>the assistant has an unambiguous signal that “done” is not true yet</li>
+<li>the human doesn’t need to police every rule manually</li>
+</ul>
+<h2>Evidence-Led Governance: Don’t Review Opinions, Review Artefacts</h2>
+<p>Governance gets stronger when you stop reviewing “what the assistant said it did” and start reviewing what it actually produced.</p>
+<p>That means designing your workflow so that changes come with evidence:</p>
+<ul>
+<li>tests that demonstrate behaviour, not just intent</li>
+<li>run artefacts that capture inputs, outputs, budgets, and failure modes</li>
+<li>lightweight telemetry signals that make regressions visible without a full deep-dive</li>
+</ul>
+<p>When you have that evidence layer, review becomes less about trust and more about verification. It also becomes portable: you can switch assistants (or restart sessions) without losing your ability to validate outcomes.</p>
+<h2>Why This Works With Short Sessions and Different Assistants</h2>
+<p>Most advice assumes one assistant and one long conversation.</p>
+<p>That is a fragile architecture. It depends on conversational continuity and tool-specific memory.</p>
+<p>A governance-first setup is designed to be restartable:</p>
+<ul>
+<li>durable state lives in git-backed contracts and documents</li>
+<li>procedural state lives in the workflow</li>
+<li>correctness is proven by gates</li>
+</ul>
+<p>This enables an intentional operating model:</p>
+<ul>
+<li>end sessions aggressively</li>
+<li>start fresh sessions for new tasks</li>
+<li>reload the authoritative contracts at the start</li>
+</ul>
+<p>When “memory” is externalised into the repo, you stop relying on any one assistant’s internal state.</p>
+<h2>A Practical Boundary Rule: Don’t Duplicate Shared Operational Contracts</h2>
+<p>One of the easiest ways to create drift is to duplicate shared rules inside module specs.</p>
+<p>If a shared capability exists (observability conventions, run artefacts, error envelopes), modules should inherit it by reference and only add what is genuinely module-specific.</p>
+<p>This keeps:</p>
+<ul>
+<li>the shared contract maintainable (one place to update)</li>
+<li>module PRDs lean (intent-led)</li>
+<li>the assistant’s context high-signal (less repetition, fewer contradictions)</li>
+</ul>
+<h2>The Outcome: Autonomy You Can Trust</h2>
+<p>When governance is treated as a system, not as prompting technique, you get:</p>
+<ul>
+<li>consistent behaviour across sessions</li>
+<li>consistent behaviour across assistants</li>
+<li>recoverability after a machine change</li>
+<li>faster execution because the assistant isn’t re-deriving rules every time</li>
+</ul>
+<p>Most importantly, you can delegate without gambling.</p>
+<p>The human’s job shifts from “supervise every output” to “design the system that makes outputs verifiable”.</p>
+<p>That is what it means to govern AI coding assistants.</p>
+
+</body>
+</html>

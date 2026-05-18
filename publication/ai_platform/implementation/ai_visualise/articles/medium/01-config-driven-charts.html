@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Config-Driven Charts Without Code</h1>
+<p><strong>Series:</strong> LLM-Driven Data Visualisation — Part 1 of 7</p>
+<p>Most reporting pipelines have one thing in common: nothing is recorded. No manifest, no reproducibility, no way to definitively explain last quarter’s charts. This is the architecture of a config-driven visualisation pipeline: YAML in, auditable report out, zero LLM calls required.</p>
+<h2>Who this is for</h2>
+<p>You build recurring reports and dashboards and you want the “what to show” decisions to be explicit, versioned, and repeatable.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>Why config-driven visualisation is an architecture pattern, not a convenience feature</li>
+<li>How “separate specification from execution” reduces maintenance churn as datasets change</li>
+<li>What makes an automated report auditable instead of “a notebook someone ran once”</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>The output must be reproducible from a config file, not a notebook state</li>
+<li>The report must carry an audit trail of what was requested and what was generated</li>
+</ul>
+<p>Most data reporting pipelines look like this: write a SQL query, export to CSV, open Excel or a Python notebook, decide what charts to draw, format them, export images, paste into a slide deck. Do it again next month.</p>
+<p>The problem is not the tools. The problem is that every step requires a human decision, and none of those decisions are recorded anywhere. When the dataset changes or someone asks "what exactly did you show last quarter?", you start over.</p>
+<p>In the platform’s visualisation module (called <code>ai_visualise</code> in this codebase), explicit mode replaces the manual steps with a config file. The analyst describes what to show in YAML. The pipeline reads the dataset, executes transformations in Pandas, and writes an HTML report with an audit trail. No Python chart code. No decisions lost in a notebook.</p>
+<h2>Why most reporting pipelines are not reproducible</h2>
+<p>Most practitioners who need to automate reporting reach for matplotlib or Plotly scripts. The pattern is familiar:</p>
+<pre><code class="language-python">df = pd.read_csv(&quot;data.csv&quot;)
+fig = px.bar(df.groupby(&quot;region&quot;)[&quot;revenue&quot;].sum().reset_index(), x=&quot;region&quot;, y=&quot;revenue&quot;)
+fig.write_html(&quot;revenue_by_region.html&quot;)
+</code></pre>
+<p>This works for one chart. For a ten-chart dashboard, you have ten separate code paths, each making implicit assumptions about column types, aggregation order, and output location. When the dataset changes, you debug each chart separately. When a stakeholder asks to add a filter, you change code.</p>
+<p>The deeper issue: the chart definition and the execution logic are mixed together. There is no declarative record of what was requested — only imperative code that does it.</p>
+<h2>The decision: separate specification from execution</h2>
+<p>Explicit mode inverts this. You write what you want in YAML:</p>
+<pre><code class="language-yaml">mode: explicit
+
+dataset:
+  path: data/sales_data.csv
+  format: csv
+
+visualisations:
+  - name: revenue_by_region
+    type: bar
+    columns:
+      x: region
+      y: revenue
+    options:
+      title: &quot;Revenue by Region&quot;
+
+  - name: revenue_trend
+    type: line
+    columns:
+      x: date
+      y: revenue
+    options:
+      title: &quot;Monthly Revenue Trend&quot;
+
+output:
+  directory: &lt;output_dir&gt;
+  write_manifest: true
+</code></pre>
+<p>The pipeline reads the dataset, validates that the referenced columns exist, applies any transformations, and renders the charts. Zero LLM calls. Zero Python chart code.</p>
+<h3>What the runtime does and does not do</h3>
+<p>The runtime executes the specification deterministically:</p>
+<ul>
+<li><strong>Does:</strong> validates column names against the actual dataset before rendering</li>
+<li><strong>Does:</strong> applies group-by, aggregate, sort, and top-N transformations where specified</li>
+<li><strong>Does:</strong> writes each chart as a standalone HTML file, plus <code>index.html</code> for navigation and <code>report.html</code> with narrative panels</li>
+<li><strong>Does not:</strong> guess your intent — if a column does not exist, it fails loudly</li>
+</ul>
+<p>That last point matters for reproducibility. Silent wrong output is harder to debug than a loud correct error.</p>
+<h2>What you get: the output artefacts</h2>
+<p>A run produces four artefacts:</p>
+<p><strong><code>report.html</code></strong> — the shareable analyst pack. Each chart is accompanied by a narrative panel (when provided in config). Can be sent directly to stakeholders without any dependencies.</p>
+<p><strong><code>index.html</code></strong> — navigation index for browsing individual charts.</p>
+<p><strong><code>manifest.json</code></strong> — the audit trail. Records <code>run_id</code>, <code>config_file</code>, <code>mode</code>, dataset dimensions, per-chart output paths, and <code>total_duration_seconds</code>. An example from a real test run (2026-04-01, sample data, 4 columns):</p>
+<pre><code class="language-json">{
+  &quot;run_id&quot;: &quot;2026_04_01_094127&quot;,
+  &quot;mode&quot;: &quot;explicit&quot;,
+  &quot;dataset&quot;: {
+    &quot;format&quot;: &quot;csv&quot;,
+    &quot;columns&quot;: 4
+  },
+  &quot;visualisations&quot;: [
+    {
+      &quot;name&quot;: &quot;age_by_city&quot;,
+      &quot;type&quot;: &quot;bar&quot;,
+      &quot;inferred&quot;: false
+    }
+  ],
+  &quot;llm_calls&quot;: 0,
+  &quot;total_duration_seconds&quot;: 0.28
+}
+</code></pre>
+<p><code>llm_calls: 0</code> and <code>total_duration_seconds: 0.28</code>. Explicit mode is fast and deterministic because there is no LLM involved.</p>
+<h2>Running it</h2>
+<p>Run the pipeline in explicit mode with a YAML config and a public dataset. The runtime validates column references before rendering and writes a shareable <code>report.html</code> plus an auditable <code>manifest.json</code>.</p>
+<h2>The practical value</h2>
+<p>The audit trail is what makes this useful beyond demos. <code>manifest.json</code> records exactly what ran, with what config, against what data, producing which outputs. Two engineers running the same config against the same dataset get identical outputs — and the manifest proves it.</p>
+<p>The YAML config is also version-controllable. Tracking chart definitions in git means you can answer "what were we showing in the Q1 board pack?" without opening a notebook.</p>
+<p>[NEEDS_DATA: screenshot of report.html from an explicit-mode run on a public dataset — showing at least 2 charts with the audit manifest visible]</p>
+<h2>The limit of this approach</h2>
+<p>Explicit mode requires you to know which charts you want. For a familiar dataset with a well-defined reporting requirement, this is the right choice — fast, reproducible, no LLM cost.</p>
+<p>But for an unfamiliar dataset, or when the question is "what does this data tell me?", you need something different. That is what the next article covers.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>If stakeholders need ad-hoc exploration, config-driven reports can feel restrictive; it is best for repeatable packs.</li>
+<li>Automated charting must be validated; without schema checks and manifests, failures become silent.</li>
+<li>For sensitive datasets, publish-safe examples must use public equivalents; do not embed client schema conventions in the article.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; explicit mode (0 LLM calls); manifests enabled</li>
+<li>Dataset class: public tabular dataset (publish-safe)</li>
+<li>Non-reproducible from this article: any internal reporting contracts or client-specific packs</li>
+</ul>
+
+</body>
+</html>

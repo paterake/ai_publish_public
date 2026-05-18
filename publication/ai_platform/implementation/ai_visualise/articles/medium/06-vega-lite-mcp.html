@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Vega-Lite via MCP: AI-Specified Charts Without Code Generation</h1>
+<p><strong>Series:</strong> LLM-Driven Data Visualisation — Part 6 of 7</p>
+<p>If charts are config, they can be tools. Model Context Protocol (MCP) turns “generate a report” into a bounded, callable operation. This is how to expose a local visualisation pipeline as an MCP tool surface.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>MCP is an interface contract: tools are bounded operations with schemas, not free-form code execution.</li>
+<li>Vega-Lite works because specs are schema-validatable before rendering.</li>
+<li>Production reliability requires hard gates: field validation, schema errors you can act on, and row caps to prevent unbounded output.</li>
+</ul>
+<h2>Who this is for</h2>
+<p>You are building or operating an AI-enabled data workflow and you care about reliability, auditability, and repeatability more than demos.</p>
+<h2>What you’ll learn</h2>
+<ul>
+<li>The key design decisions that made the final implementation work</li>
+<li>The turning points (attempt → failure → decision → proof) that justify the architecture</li>
+<li>The limits and where the approach does not apply</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>Local-first / zero data egress where relevant</li>
+<li>Outputs must be auditable (sources, artefacts, manifests)</li>
+</ul>
+<p>Most AI assistants can describe a dataset in detail. The bottleneck is turning that description into a chart a human can review, share, and iterate on — without writing plotting code.</p>
+<p>The Vega-Lite Model Context Protocol (MCP) pattern closes that gap. The assistant reasons in chat. When a chart is needed, it calls a rendering tool that accepts a declarative Vega-Lite spec and returns a rendered output. No Python. No <code>exec()</code>. No chart library API calls embedded in conversation.</p>
+<p>This article explains why Vega-Lite is a good fit for this pattern, what the MCP contract looks like in practice, and the exact setup you can hand to a coding assistant to get a working local installation.</p>
+<h2>Why Vega-Lite and not Plotly, matplotlib, or D3</h2>
+<p>The practical reason is validation. Vega-Lite charts are declarative JSON objects with a published schema (v5). Every field has a defined type and a valid value set. A validator can check a Vega-Lite spec for correctness before rendering — without running any code.</p>
+<p>Compare that to Plotly or matplotlib: both require generating Python function calls. You cannot meaningfully validate "does this <code>px.bar()</code> call produce a correct stacked normalised bar chart?" without executing it. Schema validation is not available because there is no formal schema for imperative chart code.</p>
+<p>The second reason is diffability. A Vega-Lite spec is a JSON object you can store, version, diff, and reason about. You can check whether two specs are equivalent, whether a spec change affects the chart type or the data encoding, and whether the model's repair attempt actually fixed the problem. Imperative plotting code does not offer this.</p>
+<p>The third reason is portability. A Vega-Lite spec renders identically in any environment with a Vega-Lite renderer. The same spec that renders in a local HTML file renders in Observable, in a Jupyter notebook with <code>vega_datasets</code>, or in any MCP client that supports Vega-Lite output. The rendering environment does not affect the spec.</p>
+<h2>The trust boundary this creates</h2>
+<p>When an assistant generates a Vega-Lite spec and passes it to an MCP rendering tool, the trust boundary is clear:</p>
+<ul>
+<li><strong>The assistant proposes:</strong> chart type, encoding fields, transformation hints, colour scheme, title</li>
+<li><strong>The MCP tool proves:</strong> whether the spec is schema-valid, whether the field references match the loaded dataset, whether the rendered output is correct</li>
+</ul>
+<p>The assistant cannot produce a chart that bypasses this validation. If the spec is invalid, the tool returns a schema error — structured, human-readable, and actionable. The assistant can read the error and repair the spec. This is a deterministic repair loop, not a silent failure.</p>
+<h2>The two-tool MCP contract</h2>
+<p>Most Vega-Lite MCP servers expose two operations, and this simplicity is intentional:</p>
+<p><strong><code>save_data</code></strong> — persist a dataset under a name
+- Input: dataset name + rows (array of JSON objects)
+- Effect: the server stores the dataset for subsequent renders</p>
+<p><strong><code>visualize_data</code></strong> (or <code>visualise_data</code>) — render a Vega-Lite spec
+- Input: dataset name + Vega-Lite JSON spec (as string or object)
+- Output: rendered artefact (PNG as base64, or Vega-Lite spec text for verification)</p>
+<p>Two tools. One contract. The simplicity reduces tool confusion — the assistant always knows which tool to use and what to pass.</p>
+<h2>Local installation (conceptual)</h2>
+<p>You run a local MCP tool server that implements the Vega-Lite contract, then register that server with your assistant so the assistant can call <code>save_data</code> and <code>visualize_data</code>. Keep the server local to avoid data egress. The exact registration steps vary by client; the important part is the contract shape, not the specific implementation.</p>
+<h3>A first test prompt</h3>
+<p>Once the tools are available, ask the assistant to:</p>
+<ol>
+<li>Save a small dataset (5-20 rows) under a name</li>
+<li>Render a simple bar chart spec against it</li>
+</ol>
+<p>Example dataset shape to give the assistant:</p>
+<pre><code class="language-json">[
+  {&quot;month&quot;: &quot;Jan&quot;, &quot;precipitation_mm&quot;: 147},
+  {&quot;month&quot;: &quot;Feb&quot;, &quot;precipitation_mm&quot;: 99},
+  {&quot;month&quot;: &quot;Mar&quot;, &quot;precipitation_mm&quot;: 97},
+  {&quot;month&quot;: &quot;Apr&quot;, &quot;precipitation_mm&quot;: 43}
+]
+</code></pre>
+<p>Expected Vega-Lite spec the assistant should produce:</p>
+<pre><code class="language-json">{
+  &quot;$schema&quot;: &quot;https://vega.github.io/schema/vega-lite/v5.json&quot;,
+  &quot;mark&quot;: &quot;bar&quot;,
+  &quot;encoding&quot;: {
+    &quot;x&quot;: {&quot;field&quot;: &quot;month&quot;, &quot;type&quot;: &quot;nominal&quot;},
+    &quot;y&quot;: {&quot;field&quot;: &quot;precipitation_mm&quot;, &quot;type&quot;: &quot;quantitative&quot;}
+  }
+}
+</code></pre>
+<p>If the MCP server is running and the assistant calls both tools correctly, you should receive a PNG of a bar chart.</p>
+<h2>What the happy path misses</h2>
+<p>The most common operational problems in production Vega-Lite MCP workflows are not about chart aesthetics. They are about reliability:</p>
+<p><strong>Near-JSON from the assistant</strong> — trailing commas, unescaped quotes, comments. The assistant generates something that looks like JSON but is not. A validator that can parse and repair common JSON syntax errors is worth having.</p>
+<p><strong>Near-valid Vega-Lite</strong> — wrong enum values (<code>"type": "cat"</code> instead of <code>"type": "nominal"</code>), wrong nesting (<code>{"stack": {"value": "normalise"}}</code> instead of <code>"normalise"</code>), missing required fields. Schema validation pinned to v5 catches these before the renderer runs.</p>
+<p><strong>Field name mismatch</strong> — the assistant references <code>precipitation</code> but the dataset has <code>precipitation_mm</code>. This is caught at render time if the tool validates field references against the loaded dataset. If it does not, the chart renders empty silently.</p>
+<p><strong>Unbounded output</strong> — a 100,000-row dataset produces a massive PNG (or a slow render). A row cap on the <code>save_data</code> tool prevents this.</p>
+<p>When choosing or building an MCP server, insist on schema validation (with human-readable errors), field reference validation, and a row cap. These are not optional hardening — they are the requirements that distinguish a reliable tool from one that fails silently.</p>
+<h2>Where this pattern is most useful</h2>
+<p><strong>Interactive exploration</strong> — ask a question, see a chart, refine the question. The round-trip of "spec → render → review → revise spec" is fast enough to iterate in conversation.</p>
+<p><strong>Reproducible artefacts</strong> — specs can be saved alongside conversation history. Two people following the same conversation can reproduce the same charts.</p>
+<p><strong>Multi-assistant workflows</strong> — different assistants can share the same rendering tool. The spec format is the stable interface; the rendering environment is a detail.</p>
+<h2>Limits / when not to use</h2>
+<ul>
+<li>MCP tool surfaces must remain tightly allowlisted; permissive tool execution is a security risk.</li>
+<li>Tool contracts need stable schemas; frequent breaking changes will erode trust in automation.</li>
+<li>Remote transports require authentication and rate limiting before production use.</li>
+</ul>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; MCP tool surface is stdio; Vega-Lite renderer <code>strict=true</code>; report outputs are HTML with embedded index; tool allowlist enforced</li>
+<li>Dataset class: Iris (public Vega dataset; JSON)</li>
+<li>Non-reproducible from this article: exact prompts, proprietary taxonomies, and internal contracts</li>
+</ul>
+
+</body>
+</html>
