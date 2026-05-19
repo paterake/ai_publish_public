@@ -22,7 +22,4 @@ One more: if you need mandatory structure and completeness, that’s an engineer
 
 Also: treat fine-tuning like a model release. It can degrade capability outside the target behaviour, so regression-test the tasks you still care about.
 
-Full decision framework on Medium:
-_add Medium URL_
-
 #AI #RAG #SoftwareArchitecture #MachineLearning #LLM

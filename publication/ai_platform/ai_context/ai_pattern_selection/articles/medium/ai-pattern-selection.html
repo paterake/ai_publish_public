@@ -3,7 +3,15 @@
 <body>
 
 <h1>AI Pattern Selection: RAG, Fine-Tuning, and Context Injection</h1>
-<p>“Fine-tune it on our documents” is one of the most expensive misunderstandings in enterprise AI.</p>
+<p>Image created by the author using Midjourney</p>
+<p>“Fine-tune the LLM on our documents” is one of the most expensive misunderstandings in enterprise AI.</p>
+<p>It usually shows up as a confident shortcut:</p>
+<p>“We can train the model on our business by fine-tuning its weights — maybe with LoRA — and then it will <em>know</em> our policies and procedures.”</p>
+<p>In one early governance assistant build, that exact sentence was the first suggestion in the room. It sounded sensible. It was not.</p>
+<p>In my case, that suggestion kept coming up in two real workflows:</p>
+<p>First: I use RAG to enrich corporate data models with corporate policy and governance guidelines so the system can generate rich business glossaries over data with provenance.</p>
+<p>Second: I use context injection to draft architecture design documents that must conform to policies, guidelines, goals, principles, and standards. The same pattern produces C4 diagrams and architecture decision records that go through enterprise review, approval, and signoff.</p>
+<p>In both cases, someone suggested the “simpler” approach: fine-tune a cloud model on the same documents so it can do the job end-to-end, and use LoRA to make it cost effective.</p>
 <p>The reason is simple:</p>
 <p><strong>Fine-tuning trains the voice. Retrieval retrieves the facts.</strong></p>
 <p>If you mix those up, you create the most dangerous failure mode in governance, compliance, and architecture work: a model that sounds authoritative while being confidently wrong, with no provenance.</p>
@@ -62,7 +70,7 @@
 <li>Task-specific behaviour (classification, routing, tagging)</li>
 <li>Reasoning patterns demonstrated across many examples</li>
 </ul>
-<p>It is not good at becoming a reliable store of new factual knowledge. Research is consistent on this point: even full-weight fine-tuning, not just LoRA, struggles to encode and recall new factual content reliably. A model fine-tuned on a large handbook will often sound like it, without being able to faithfully recall specific clauses when queried.</p>
+<p>It is not good at becoming a reliable store of new factual knowledge. That is the core failure mode. Research is consistent on this point: even full-weight fine-tuning, not just LoRA, struggles to encode and recall new factual content reliably. A model fine-tuned on a large handbook will often sound like it, without being able to faithfully recall specific clauses when queried.</p>
 <p>That is why fine-tuning is so often misapplied: people are trying to teach facts, and getting “voice” instead.</p>
 <p>It can appear to work for “canned” institutional answers in narrow cases, but it does not behave like a queryable knowledge base: no provenance, weak generalisation to paraphrases, and it goes stale without an obvious signal when the underlying facts change.</p>
 <p>Fine-tuning can also degrade general capability outside the target behaviour. Treat a fine-tuned model as a new model release: regression-test it on the critical tasks you still depend on.</p>
@@ -93,6 +101,7 @@
 <li>Wrong with no way to trace what it relied on</li>
 </ul>
 <p>In regulated or audited domains, that is worse than a system that sometimes returns “I don’t know”.</p>
+<p>That was the failure mode that finally settled the argument in that first build: the outputs were fluent, but they had no provenance. Once you see that in a governance context, you stop treating “fine-tune it” as a default.</p>
 <p>If your use case requires traceability, you are already in retrieval territory. You do not fix traceability with training.</p>
 <h2>A Practical Decision Tree</h2>
 <p>Ask these in order:</p>
@@ -172,6 +181,7 @@ If yes: you need an engineering wrapper. Fine-tuning shapes tendencies; it does 
 <h2>The One-Line Summary</h2>
 <p>If you remember one rule, make it this:</p>
 <p><strong>If you need facts, retrieve them. If you need behaviour, train it. If you already have the material, inject it.</strong></p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
 
 </body>
 </html>
