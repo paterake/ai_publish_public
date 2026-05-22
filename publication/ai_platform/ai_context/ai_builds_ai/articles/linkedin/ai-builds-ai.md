@@ -1,33 +1,17 @@
-The AI that builds your system is not the AI that runs inside it.
+The LLM that builds your system is not the LLM that runs inside it.
 
-I hit this properly when I used the same local model in two jobs:
+In my setup, the same codebase runs one loop in the IDE and another in the pipeline.
 
-- as a coding assistant (interactive, reviewed)
-- as the “worker” model inside a pipeline (batch, unattended)
+One is the build loop: a cloud coding assistant (Claude Code / Trae / Qwen Code) helps me write and refactor in the IDE. It proposes diffs. I approve them. Tests and hooks act as the guardrails.
 
-Same model.
-Completely different failure modes.
+The other is the run loop: the pipeline executes locally via Ollama (e.g. qwen2.5:7b, qwen3.5:9b, plus a local embedder like nomic-embed-text). This is the part that touches real operational data, so "data stays inside the system" is non-negotiable.
 
-In the IDE, a bad suggestion is annoying — but it’s visible. You reject it, or tests fail, or a hook blocks the risky command.
+That constraint forces a clean boundary: the cloud assistant never sees raw inputs or outputs.
+It sees LLMOps artefacts: a run ID, a manifest, and structured telemetry (hashes and metrics rather than raw content).
 
-In a pipeline, the worst failure is the one that looks like success:
-an answer that sounds plausible, ships downstream, and only gets challenged days later.
+That’s enough to iterate safely.
+One small example: turning on "thinking mode" looked like it should help, but it could burn the generation budget and come back empty. The fix was boring and explicit: default thinking off for publication runs and cap retries.
 
-So the governance has to be different.
-
-Developer AI governance is about fast control surfaces:
-deterministic gates, session constraints, and review before anything lands.
-
-Worker AI governance is about bounded execution:
-budgets, timeouts, correlation IDs, validation, and explicit degrade modes when evidence is missing.
-
-📌 If you treat both as just “AI”, you tend to do the wrong thing twice:
-
-- you bring production ceremony into development (and people bypass it)
-- you bring assistant-style permissiveness into production (and you get silent wrong outputs)
-
-One question makes it practical:
-
-When this output is wrong, who catches it first?
+If you’re building LLM systems, I think it helps to ask: which role is the model playing, and who catches it first when it’s wrong?
 
 #AI #AIEngineering #SoftwareArchitecture #ClaudeCode #Trae

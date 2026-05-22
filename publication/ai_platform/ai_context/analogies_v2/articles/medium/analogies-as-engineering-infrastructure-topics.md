@@ -1,0 +1,5 @@
+- Artificial Intelligence
+- Software Engineering
+- Software Architecture
+- Machine Learning
+- Large Language Models

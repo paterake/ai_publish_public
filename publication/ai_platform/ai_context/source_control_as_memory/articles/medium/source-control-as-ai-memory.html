@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Source Control Is the Only Memory Your AI Assistants Share</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>What a rate limit forced me to learn about where AI rules should live</em></p>
+<h2>TL;DR</h2>
+<p>The day I switched AI tools mid-session, everything the assistant had learned about how I work disappeared. Not corrupted. Just gone, because none of it had ever been in the repository.</p>
+<p>The rules governing how an AI touches your code belong in the same place as the code itself. Not in a tool-local directory. Not in a chat history. In the repository, under version control, where any assistant on any machine can find them.</p>
+<p>That shift changes what accumulates over time. AI tools come and go. The rules your project earned from its own failures stay.</p>
+<h2>The day the assistant forgot everything</h2>
+<p>As a data engineer, code and git go hand in hand. Code that isn't committed might as well not have been written. That instinct follows you into everything you build.</p>
+<p>When I moved to AI coding assistants, that instinct did not follow me there. I did what most developers do. I let the tools accumulate their own state. Over weeks, Claude Code accumulated my coding conventions, DRY principles, config-over-code preferences, SQL formatting standards, token economy discipline. All of it lived in a tool-local directory (<code>~/.claude</code> on my machine). That is the natural default. You let the assistant manage its own state, accumulate your preferences, learn how you work. Most developers do exactly this without a second thought. It works. Right up until it doesn't.</p>
+<p>Then I hit a rate limit.</p>
+<p>Mid-session, Claude Code stopped. I switched to Trae. I opened the same project.</p>
+<p>Nothing. Every convention, every constraint, every carefully encoded understanding of how I work was gone. The state hadn't been corrupted or partially broken. Simply invisible. None of it had ever been in the repository. All of it had lived in one tool's local directory, on one machine, readable by one assistant. I had not lost code. I had lost weeks of accumulated collaboration norms, and I had no recovery path.</p>
+<p>The data engineer in me felt this immediately. I would never store critical project state in a local directory that isn't backed up, isn't portable, isn't under version control. I had been doing exactly that with the rules that governed how an AI assistant touched my code, and I hadn't noticed because the failure was invisible until the moment the tool changed.</p>
+<h2>The second failure was slower and harder to see</h2>
+<p>The rate limit incident was sharp. The second failure had been accumulating quietly for weeks before I named it.</p>
+<p>I had clear rules: single responsibility per file, DRY code, config over hardcoded values. The assistant knew them. I had stated them, corrected violations, seen them applied. But over the course of a long session, or across a session boundary, they would erode. A file that started as a single concern would grow to hold multiple concerns. When I needed to edit one function, the assistant would modify the file and break something adjacent that had been working. Token burn from re-implementing utility code that already existed somewhere else.</p>
+<p>The assistant wasn't ignoring the rules. It was following the most recent signal in context, the immediate task, and the rules were older, lower-weight signals from earlier in the session. Or they were from a previous session that the new session had no access to. Nothing failed visibly. There was no red build, no broken test. The constraint just quietly stopped being enforced, and the code drifted toward the god-file patterns I had specifically said I didn't want.</p>
+<p>A rule without a failure signal is a preference. Preferences erode under pressure.</p>
+<h2>The problems kept multiplying, and they weren't separate</h2>
+<p>I had named two failures. But I kept collecting more.</p>
+<p>Long sessions added another failure. Validation scripts lived in temporary local files, never committed, so when the session closed the work was gone. Work that was genuinely done but not written into the repository, so the next session had no evidence it had happened. I did my homework. I forgot to bring it in.</p>
+<p>And then, when a task ran across multiple days and tools, each new session had to re-establish weeks of accumulated constraints from scratch, or burn tokens re-implementing utility code whose existence lived only in a chat transcript no assistant would ever read.</p>
+<p>The failures looked unrelated. A tool switch. Slow drift. Lost validation work. Repeated context setup. Different triggers, different symptoms, different moments of noticing.</p>
+<p>The root cause was the same in each case. Project state that lived outside the repository.</p>
+<p>That framing changed how I read the machine wipe test.</p>
+<h2>What the machine wipe test made obvious</h2>
+<p>I ran a deliberate test. I deleted both Claude Code and Trae's local configuration directories entirely, including the hidden <code>~/.claude</code> and <code>~/.trae</code> folders. Then I uninstalled both tools completely and reinstalled them from scratch.</p>
+<p>With a configuration that lived only in tool-local directories, nothing recovered. Weeks of accumulated rules and corrections, gone.</p>
+<p>Then I cloned the repository into a fresh environment. If the rules had been committed to the repository, the clone was the recovery. One command, full harness, no loss.</p>
+<p>That test reframed the entire problem. The question was not "how do I configure my AI assistant?" It was "where does this configuration live, and what survives when the tool goes away?"</p>
+<p>The <code>~/.claude</code> folder is not source control. A machine wipe erases it. A different tool cannot read it. Two assistants on the same project cannot share it. That is local state, and I already knew from years of data engineering that local state is the wrong place to store anything that matters.</p>
+<h2>Layers, not one</h2>
+<p>When I thought "AI memory," I was collapsing several distinct things into one.</p>
+<p><strong>Ephemeral memory</strong> is in-flight state: active run identifiers, blockers being resolved, decisions still being evaluated. It ends with the session. This is the right layer for temporary context, and only temporary context.</p>
+<p><strong>Assistant-local memory</strong> is tool-specific persistence, preferences and patterns saved by one vendor's client across sessions. It feels permanent because it survives session restarts. But it is vendor-local. No other assistant can read it, a tool switch resets it, and a machine wipe destroys it. The persistence is real. The portability is not.</p>
+<p><strong>Governing artefacts</strong> are rules, constraints, and workflow definitions stored in the repository. Git-backed. Readable by any assistant, on any machine, in any tool that reads the project directory. Durable across tools, machines, and time.</p>
+<p>The mistake I had been making, and the mistake most people using this setup make, was storing stable rules in the assistant-local layer. The practical rule:</p>
+<p><em>If a rule should change assistant behaviour across sessions or across tools, it belongs in the repository.</em></p>
+<p>Everything else stays ephemeral.</p>
+<h2>Why rules erode even when they're stated clearly</h2>
+<p>Drift comes from a handful of mechanisms. I might be over-indexing on my own workflow here, but the pattern is consistent.</p>
+<p>Nearest-open-file bias shows up when adding a feature. The assistant modifies the file that already contains related logic. Creating a new file requires a structural decision; extending the existing file satisfies the immediate task. Under pressure, extension wins.</p>
+<p>Attention budget shows up too. As implementation detail accumulates in a session, the relative weight of structural constraints from earlier in the session decreases. They are not ignored. They are lower-weight signals in a saturated context. In a new session, those constraints carry over only if they are explicitly re-established.</p>
+<p>Missing failure signals matter even more. When a structural rule is violated, nothing breaks. No red build, no failing test, no gate that fires. A rule without a failure signal is advisory. Advisory rules are the first casualty of task pressure.</p>
+<p>A subtler failure is work that happened but wasn't captured. An assistant can make a fix, validate it, confirm it works, and if the outcome isn't written into a durable artefact before the session closes, the next session has no evidence it occurred. The work is real but the system cannot reuse it. The analogy that made this failure obvious to me: <em>I did my homework, but I forgot to bring it in.</em> "I did it" is not evidence. If it isn't in the repository, the system cannot inherit it.</p>
+<h2>What replaces tool-local configuration</h2>
+<p>Governance-first development is not about writing better prompts or longer configuration files. Prompts are session-scoped. Preferences do not survive contact with urgency. Governance is a set of mechanisms that outlive any individual session: contracts that define intent, triggers that fire on violations, and gates that block work when constraints are broken.</p>
+<p><strong>Contracts (module-level)</strong> define what a module must do and what it must never violate, independently of how it currently does it. A good contract states intent, scope, active invariants, and what "done" looks like in observable terms. It does not describe the current implementation. Implementation details rot on first refactor. The test: can you refactor the entire implementation and still use the same contract? If yes, it captures intent. If the refactor would break it, it captures approach. Approach is the wrong thing to govern.</p>
+<p><strong>Constitution (repo-level)</strong> is where cross-cutting rules live: architectural pillars, boundary rules, workflow triggers. These must be in one place. If the same principle is encoded across multiple locations, it will drift. Each location encodes a different version of the rule. In practice, the same operational standard (telemetry requirements, degrade modes, error taxonomy) is inherited at the top of every module's anchor document without being re-stated in any session's conversation. Twelve modules, one standard, consistently applied by agents that never shared a session.</p>
+<p><strong>Procedures</strong> are repeatable workflows that eliminate "go and remember how we do this." If a check must happen every time, before a commit, after a refactor, when documentation changes, encode it as a structured sequence.</p>
+<p><strong>Gates</strong> convert governance from advisory to structural. A gate is a condition that stops the work when violated, in the test suite, the build, the automation. It lives outside the assistant's context window and cannot be deprioritised by task pressure. The assistant doesn't need to remember the rule. It learns the rule is real because violating it produces a failure it must resolve before proceeding.</p>
+<p>These gate patterns address most drift vectors. Docs and code change together in the same commit; accept no "we'll update later," because a stale doc becomes false ground truth for the next session. Structural invariants get enforced with a measurable proxy that fails fast. Summary documents get tested against a ground-truth signal in the repository. The pattern is the same: state the invariant, define the check, fail when it drifts.</p>
+<p>In practice, the entry points are disarmingly simple. Every AI coding assistant reads its own configuration file on startup: <code>CLAUDE.md</code> for Claude Code, <code>TRAE.md</code> for Trae, <code>QWEN.md</code> for Qwen Code. Each of those files contains one line, a pointer to the shared governance document. The same principle extends to rules, skills, and enforcement hooks. Each tool's project configuration directory (<code>.claude/</code>, <code>.trae/</code>, <code>.qwen/</code>) contains symlinks pointing to the same canonical rules and skill definitions in the repository. Three tools. Three thin shells. One governance layer. Any assistant that opens the project reads the same contracts, executes the same procedures, and is subject to the same enforcement through its own door. A skill written once is immediately available to every assistant. There is no per-tool skill library to maintain and no porting work when you switch tools. The investment compounds across the entire toolset, not just the tool you happened to be using when you built it.</p>
+<h2>What changed when the rules moved to the repository</h2>
+<h3>Cross-session continuity</h3>
+<p>The approach is deliberate. One new session per bounded backlog item. The goal is precision; context limits are a secondary benefit. A fresh session attends to loaded context at full precision. A long session accumulates implementation signals that progressively bury early constraints.</p>
+<p>The mechanism is one anchor document per backlog thread. At the end of each item, the outgoing assistant writes back what changed (at file level), which constraints remain active, what comes next, and the exact verification command. The next session starts from that document alone. The resume prompt is a single line: <em>"From [anchor doc]: continue [item]."</em></p>
+<p>Here is what that looks like in practice:</p>
+<pre><code class="language-markdown"># Module Refactor - Anchor
+&gt; **Anchor. Next: Item 3 (extract config resolver).**
+&gt; To resume: `From docs/TODO.md: continue Item 3.`
+&gt; Read Accumulated Constraints before touching code.
+## Accumulated Constraints
+- All LLM calls must emit a run_id-correlated telemetry event (established Item 1)
+- Config values must not be hard-coded in source - YAML only (established Item 2)
+### Item 2: Split orchestrator into single-responsibility modules ✅
+&gt; ✅ Checkpoint (2026-04-14)
+&gt; - Split orchestrator.py (340 lines) → runner.py, config_loader.py, stage_router.py
+&gt; - No logic changed - pure structural split
+&gt; - Verified: pytest tests/ -q - 42 passed, 0 failed
+### Item 3: Extract config resolver ⏳
+Scope: move all config-path logic from runner.py into config_resolver.py
+Must not change: public interface of runner.py
+Verification: pytest tests/test_runner.py -q passes;
+             grep -r &quot;config_path&quot; src/runner.py returns empty
+</code></pre>
+<p>The opening blockquote is the entire briefing: the next item, the resume command, and the constraint reminder. Everything a new session needs before touching code. The Item 2 checkpoint is evidence: specific files, specific command, specific result, date. The Accumulated Constraints section is the constraint register every session reads before touching code.</p>
+<p>The non-obvious part is constraint inheritance. Each completed item establishes invariants that future items must honour. If those aren't explicitly forwarded into the anchor document, a future session will not apply them. The agent isn't careless; the constraint was simply never stated. This is the re-entry point for drift, even in a well-governed system.</p>
+<p>In practice, the six-session refactor is one example. The full proof is the platform itself: twelve modules, built over six months, across multiple AI coding assistants (Claude Code, Qwen Code, Trae). Each module has its own anchor document. Every completed item carries a date-stamped checkpoint recording the specific files changed, the exact verification command run, and the test result. A constraint established in one module (a telemetry standard, an architectural boundary) stays active in every session that touches any other module for months afterwards, by agents that never saw the session that established it.</p>
+<p>"Done" in this system means evidenced in the repository. Chat declarations are not evidence. Run artefacts (telemetry, manifests, output records) accumulate in a designated location alongside the governance layer. Any assistant, arriving cold, can verify what actually ran.</p>
+<p>My involvement across all of it was to define the work and review the diffs.</p>
+<h3>Tool switching without regression</h3>
+<p>When the rules live in the repository, switching the AI tool is a tool change, not a re-setup. I ran the machine wipe test in the other direction, cloning a fresh environment and pointing a different assistant at it. The behaviour transferred. Same constraints, same enforcement. The repository held the rules; any assistant arriving cold could read and apply them.</p>
+<p>The portability claim holds further than expected. Claude Code is an Anthropic tool running Anthropic models. Qwen Code is an Alibaba tool running Alibaba's Qwen models. Different companies, different model families. Governance transferred cleanly across both. One of them, Trae, was running in auto mode. It selects the underlying model dynamically based on task complexity and speed, switching models under the hood without signalling the change. Governance held through that too. Not just across different tools, but across a tool that was actively changing which model it used mid-session. Whatever model Trae selected read the rules cold and applied them. What moves between tools, and between models, is meaning, not format.</p>
+<p>The test I now apply: if I switched my primary AI coding assistant tomorrow, different tool, same project, how much of my current setup would transfer? If the answer is "little," the investment is in the harness: the tool, the UI, the prompts that only one assistant sees. If the answer is "nearly everything," the investment is in governance: the repo-backed contracts and gates that any harness can load and execute against.</p>
+<h3>Context precision</h3>
+<p>One session per bounded task, not one accumulating conversation. Fresh sessions attend to loaded context at full precision; long sessions dilute early constraints under the weight of later implementation signals. The rules I spent weeks encoding into <code>~/.claude</code> are now loaded precisely, for the tasks that need them, from a location that every assistant on every machine can find.</p>
+<h2>The strategic point</h2>
+<p>The leverage is not in "better prompts" or "a better tool." It is in moving durable constraints into a durable place, then enforcing them with failure signals that outlive any one session.</p>
+<p>What accumulates in the repository outlasts any tool. The durable advantage is the content your project earned from its own failures: the contracts you wrote, the gates you installed, the procedures you stopped relying on memory for.</p>
+<p>I built an entire AI platform this way. Twelve modules. Six months. Coding assistants cycling in and out (Claude Code, Qwen Code, Trae). Each arrived cold, read the governance, executed, produced evidence, and left. The platform never regressed when a coding assistant changed. Not one solution was locked to any tool's memory. Coding assistants are hot-swappable when the platform is the memory.</p>
+<p>The repository is the only memory your AI assistants share. Build around it.</p>
+<p><em>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</em></p>
+
+</body>
+</html>

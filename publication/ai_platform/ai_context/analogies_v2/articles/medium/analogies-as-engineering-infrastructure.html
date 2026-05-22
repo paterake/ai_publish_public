@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Analogies Are Engineering Infrastructure for AI Agents</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>Not a communication aid. A precision tool that changes what the agent optimises for.</em></p>
+<p>When I built a control-and-governance framework around my coding assistants (Claude Code, Trae, and Qwen Code) — a contract layer for orchestration, observability, and governance — the hardest problem was not the architecture.</p>
+<p>The hardest problem was that the agent could do the wrong thing with complete confidence.</p>
+<p>It would optimise for wording when the real issue was missing evidence. It would stop at the first plausible answer when it hadn't actually gathered anything. It would invent structure that wasn't in the source material and present it fluently. Instructions got longer. The behaviour improved marginally and regressed unpredictably.</p>
+<p>What changed the trajectory was not another page of instructions.</p>
+<p>It was a handful of analogies — used not as explanation, but as intent specification. Each one told the agent what to optimise for, what counted as failure, and where to stop. The instructions described the mechanism. The analogies conveyed the goal.</p>
+<p>That distinction matters more than it seems. A mechanism description tells the agent what to do. An analogy tells the agent what kind of thing it is trying to be — and that shapes decisions the mechanism description never anticipated.</p>
+<h2>The practical failure loop (why I needed constraints, not more instructions)</h2>
+<p>The turning point was not a thought experiment. It was repeated failure during real work, in sessions that ran for hours well into the night.</p>
+<p>Two tasks made the problem unavoidable: reclassifying data and producing AI-driven, inference-heavy visualisations over the reclassified results. They looked like straightforward “use the model” problems. In practice they were messy. The assistant would return a plausible answer that was subtly wrong, then compensate by writing bespoke deterministic Python to validate assumptions and steer itself toward the correct result.</p>
+<p>Sometimes that validation worked. The problem was that it often lived in scratch: ad-hoc snippets, temporary artefacts, or “just for now” code that never became part of the repo.</p>
+<p>Hours later, in the same session, the assistant could correctly acknowledge the rule: yes, changes should be documented; yes, validation should be preserved. But under context rot, context tension, and completion pressure, it would skip the control. When I swapped sessions or assistants, the “homework” was gone. The system of record had no durable evidence of how we reached the correct outcome, so the next session rebuilt the same deterministic checks from scratch and burned tokens repeating the same exploration.</p>
+<p>On one of those nights, well after 2am, I stopped trying to push the solution forward and instead asked why something that worked once was not working again. The fastest way I found to make the failure feel non-negotiable was the reprimand: “teacher, I did the homework, but I forgot to bring it in.”</p>
+<p>At the same time, I saw a second failure mode: complexity sprawl. It crept in fast. It broke things. Under pressure, the assistant would generate increasingly complex Python. New abstractions piled up. It attacked the problem from multiple angles. The surface area expanded. A previously working case would break. Validation became harder than the question.</p>
+<p>I did not need another page of instructions. I needed small invariants that survive long sessions and cannot be reinterpreted away under pressure. That is what the analogies became.</p>
+<h2>Four analogies doing real engineering work</h2>
+<p>These are not decorative metaphors. Each one shifted agent behaviour in a specific, measurable direction.</p>
+<h3>The orchestrator as a librarian</h3>
+<p>The librarian does not store the books. The librarian makes the books findable.</p>
+<p>That one sentence corrects a common category error in tool-orchestrated systems: the assumption that the content producer controls retrieval. That assumption is simply false. In a library, the librarian decides which catalogue system to use, how to classify ambiguous material, and which path leads a patron to the right shelf. In a tool-orchestrated agent, the orchestrator makes those routing decisions dynamically, based on tool definitions and context — not on what the content originally said about itself.</p>
+<p>The analogy changes who you think owns the responsibility. When the agent was framed as a librarian, it stopped treating retrieval failures as content failures and started treating them as navigation problems — which pointed to the right set of fixes.</p>
+<h3>RAG as an open-book exam</h3>
+<p>A language model without retrieval is sitting a closed-book exam: it answers from memory, with all the confidence that entails.</p>
+<p>Retrieval-Augmented Generation is an open-book exam: you retrieve notes and then synthesise an answer. That framing exposes two distinct failure modes that the mechanism description obscures: bad notes (retrieval failure) produce confident wrong answers, and good notes with poor synthesis waste the evidence you already gathered.</p>
+<p>It also makes the governance stance obvious. You do not accept a confident answer just because it sounds fluent. You ask: where are the notes? The analogy makes "cite your sources" feel like a natural constraint rather than an added rule.</p>
+<h3>The quality gate as an editor</h3>
+<p>Before an article is published, an editor checks it against a rubric: no vague claims, proper citations, minimum substance threshold. The editor does not request a style improvement. The editor either accepts the piece or returns it for more work.</p>
+<p>A quality gate in an agent loop does the same thing for model outputs — with one constraint that makes the design implication clear: the gate cannot "ask for a rephrase." It can only reject and trigger more evidence gathering.</p>
+<p>That single constraint — <em>the gate is an evidence check, not a style check</em> — changed how the whole loop was designed. When the gate rejects, the agent does not try to write better. It goes back to research. The analogy made that constraint obvious before the first line of code was written.</p>
+<h3>The agentic loop as a detective</h3>
+<p>A detective does not stop at the first plausible lead. They gather evidence, notice what is missing, test their hypothesis against what they have, and decide whether they can close the case. Premature certainty is a mistake, not a virtue.</p>
+<p>That frame resolved two persistent problems simultaneously. First, it made iteration feel like the correct default rather than a sign of failure — the agent stopped treating "I found something" as equivalent to "I am done." Second, it made early exit feel like a bug. When the detective analogy was active, the agent could reason about whether it had actually gathered enough to commit to an answer.</p>
+<p>The operational constraints that followed: bounded iteration (a detective does not investigate forever), explicit action choices ("search again," "scan for an exact name," "close the case"), and a guardrail against stopping when the first result was merely plausible.</p>
+<h2>Why analogies work as precision tools</h2>
+<p>I had been using analogies the way most engineers do — as a communication aid, a way to explain something to a non-technical audience. What I found in practice was something different.</p>
+<p>An analogy that correctly captures the intent of a mechanism tells an agent what to optimise for in cases the instructions never anticipated. It creates a frame that generalises. I saw this directly with the detective analogy: once that frame was active, the agent started treating "I found one result" as an open question rather than a closed case — without me writing a rule that said "keep looking." The goal transferred. The instructions described what to do; the analogy encoded what it was trying to be.</p>
+<p>There is a second, more operational reason analogies worked in practice: the best ones were unambiguous, closed statements. In long sessions, context tension builds — the assistant is juggling speed, correctness, helpfulness, and “deliver the answer now” completion pressure while the context window grows and earlier constraints get diluted. In that state, it can correctly answer “yes, I know I should update the documentation” and still fail to do it.</p>
+<p>A closed-statement analogy leaves less room for reinterpretation and is easier to recall than a paragraph of policy. “Homework not submitted” behaves like a behavioural checksum: if the change is not written into the repo, it did not happen in a way the system can reuse.</p>
+<p>That is what makes analogies infrastructure rather than decoration. Infrastructure scales. A well-chosen analogy propagates through every explanation that touches the concept — across documents, across sessions, and across the AI assistants that will read and act on your specifications long after the original conversation.</p>
+<h2>What we actually did with them</h2>
+<p>We treated analogies as first-class artefacts, not throwaway lines in system prompts.</p>
+<ol>
+<li>Chose a small, stable vocabulary — four core analogies, each mapping to a specific component or failure mode.</li>
+<li>For each analogy, stated explicitly where it holds and where it breaks. The detective analogy works for iteration and evidence gathering; it does not work for latency-sensitive paths where "keep investigating" is not an option.</li>
+<li>Used each analogy term deliberately in PRDs, task briefs, and reviews as shorthand for intent — "the gate is behaving like a style editor, not an evidence editor" became a meaningful diagnostic.</li>
+<li>Verified each analogy against the actual mechanism before committing to it. If the analogy assigned responsibility incorrectly or hid a primary failure mode, it was revised or discarded.</li>
+</ol>
+<p>That covers the “explanatory” layer. Two additional analogies mattered because they changed how the assistant behaved during real work: how it validated results, how it kept state, and how it managed complexity under a token budget.</p>
+<h3>“I did my homework, but I forgot to bring it”</h3>
+<p>This was the fastest way I found to make “write it down” feel non-negotiable.</p>
+<p>An assistant can make a fix in one session and still fail the project if that fix never becomes durable state. If the change is not recorded in the artefacts a new session will actually read — docs, skills, rules, gates — then the next assistant cannot inherit it. A different tool cannot see it. A week later it is gone.</p>
+<p>In practice, this shows up as a simple loop: a questionable output triggers deterministic validation code; the validation works; the code is not captured as a durable artefact; then context rot or a session swap deletes the proof and the work has to be rebuilt. “I did it” is true, but useless.</p>
+<p>The homework analogy makes the failure obvious. “I did it” is not evidence. If you forgot to bring the homework, you do not get marks. In system terms: if the work is not captured in the repo, it did not happen in a way the system can reuse.</p>
+<h3>Bandwidth vs throughput (token economy)</h3>
+<p>I first used this analogy with my daughter on a networking question, and it turned out to be a clean reframing for AI-assisted work too: bandwidth is capacity; throughput is how much useful work actually gets delivered.</p>
+<p>For an assistant, token budget is a kind of bandwidth. You can “spend” it on complexity: bespoke abstractions, long explanations, and novel code where a known primitive would do. But complexity is not throughput. It is often the opposite.</p>
+<p>I saw this most clearly when the assistant started spawning increasingly complex Python as it tried to solve a problem from multiple angles at once. The surface area expanded, a previously working case would break, and the “solution” became harder to validate than the original question. The problem was not capability. It was optimisation target.</p>
+<p>The control implication is practical: prefer existing libraries and simpler mechanisms when they meet the requirement, because less generated code is less surface area to maintain, less text to reason about, and less token burn per future change.</p>
+<p>The goal was not to make the system easier to explain. The goal was to make it harder to build the wrong system — and harder for a future agent or engineer to quietly accept wrong behaviour as correct.</p>
+<h2>The risk: fluent misinformation scales faster than jargon</h2>
+<p>Infrastructure can fail. The failure mode of analogies is not that they are too simple.</p>
+<p>The failure mode is that they are memorable and wrong.</p>
+<p>A fluent but inaccurate analogy propagates faster than accurate jargon because it is easier to repeat. It spreads faster than you expect. It enters documentation, task briefs, and system prompts and gets reinforced with every use. By the time it is identified as wrong, it has already shaped a set of design decisions that are hard to revisit.</p>
+<p>This is why analogies need a verification posture: check the analogy against the real mechanism, state where it holds and where it breaks, and resist the temptation to invent new ones casually because they "sound right." If you cannot verify an analogy, use precise technical language until you can.</p>
+<h2>A practical test</h2>
+<p>When you introduce a new core concept into a specification or system prompt, do not ship the explanation until you can express it in one analogy that passes two tests:</p>
+<ol>
+<li>It assigns responsibility correctly — the right actor owns the right decision.</li>
+<li>It does not hide the primary failure mode — a reader of the analogy can identify what goes wrong when the mechanism fails.</li>
+</ol>
+<p>If the analogy fails either test, it is decoration. If it passes both, it is infrastructure.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>Analogies used as intent specification change what an agent optimises for, not just how it explains itself.</li>
+<li>A canonical analogy vocabulary reduces drift across documents, sessions, and assistants.</li>
+<li>A fluent but wrong analogy is more dangerous than jargon — it propagates faster and is harder to correct.</li>
+<li>Treat analogies as artefacts you verify, not improvise.</li>
+</ul>
+<p>Analogies are not a way of making hard work look easy. They are a way of making hard work <em>thinkable</em> above the level of the code — so the intent propagates without losing its structural truth across sessions, tools, and time.</p>
+<p>That is infrastructure.</p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
+
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Plan Mode Is Not a Safety Net: Why AI Coding Governance Needs to Outlive the Session</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>Plan Mode is useful. It is also the wrong thing to rely on when the work spans weeks, tools, and sessions.</em></p>
+<p>"Plan first" is good advice.</p>
+<p>Treating a session permission mode as your primary safety mechanism is not.</p>
+<p>Plan Mode — or the equivalent review-before-write flow in any AI coding tool — solves a real, bounded problem: it reduces wasted write/undo cycles in a single session by forcing the assistant to stop and think before it edits files. If your only control is "human reviews the diff," a read-only planning phase is sensible.</p>
+<p>But it is session-scoped. It ends when the session ends. And the failure modes that break long-running AI-assisted work are not session-scoped failures.</p>
+<h2>The Four Failure Modes Plan Mode Doesn't Touch</h2>
+<p>Plan Mode is a gate at the start of a single conversation. It does not solve:</p>
+<p><strong>Cross-session drift.</strong> A later session reintroduces an old pattern because the assistant has no memory of the constraint that ruled it out. The constraint was real. The documentation was accurate. But it lived in a previous chat that this session cannot see.</p>
+<p><strong>Cross-assistant inconsistency.</strong> Different tools produce different architectural styles because their "memory" isn't shared. One assistant learned the convention through weeks of correction. The other assistant starts cold with no knowledge of that history.</p>
+<p><strong>Compaction dilution.</strong> As a chat grows, subtle constraints get summarised away. The longer the session, the more the early, specific rules compete with the weight of later implementation detail. The assistant isn't ignoring the rule — it's being outcompeted by context volume.</p>
+<p><strong>Token burn by context bloat.</strong> Loading "everything" to try to preserve all prior context lowers precision and increases cost. The attempt to compensate for missing durable state makes the problem worse.</p>
+<p>If you rely on a single chat as the system of record for long-running work, you will keep re-planning the same work, re-discovering the same constraints, and re-fixing the same regressions. Plan Mode at the start of each session does not fix this — it only improves the first hour of each session.</p>
+<h2>Planning Is a Principle; Where It Lives Is a Design Choice</h2>
+<p>This is the distinction most "plan first" guidance does not make:</p>
+<ul>
+<li>Planning is a principle: understand before changing</li>
+<li>Plan Mode is one implementation surface: chat-state gating</li>
+</ul>
+<p>If you want planning to scale across sessions, tools, and team members, you need a durable surface that outlives the session. That surface is not a mode. It is the repository.</p>
+<p>The question shifts from "did the assistant plan before acting?" to "does the plan already exist in a form any assistant can read?"</p>
+<h2>The Four-Layer Governance Model</h2>
+<p>Governance-first AI development treats planning as a system property, not a session property. It is enforced by four layers — each with a distinct responsibility.</p>
+<h3>Layer 1: Contracts (module-level)</h3>
+<p>Each module needs a clear entry-point contract: a document that is sufficient for an assistant to implement or modify the module without relying on long chat history.</p>
+<p>A good contract defines intent, scope, what constraints must hold, and what "done" looks like in testable terms. It is a specification, not a diary. It must survive refactors and pressure. It does not describe how the module is currently implemented — implementation details rot immediately after a refactor. The contract captures <em>why the module exists</em> and <em>what it must never violate</em>, both of which survive implementation changes.</p>
+<p>The failure mode to avoid: a contract that becomes "a copy of the current implementation." Once the contract mirrors the code, you've lost governance — you have documentation, not a specification.</p>
+<h3>Layer 2: Constitution (repo-level)</h3>
+<p>Cross-cutting rules must live in one place.</p>
+<p>If you scatter core rules across per-module contracts, you guarantee drift: different modules encode different eras of the same principle. A rule that was refined in module A still exists in its original, less precise form in module B.</p>
+<p>The constitution is where you keep:
+- the non-negotiable architectural pillars
+- boundary rules (what belongs where, what must not be mixed)
+- workflow triggers (what must happen when — docs updated in the same change as code, for instance)
+- quality standards that span the whole project</p>
+<p>This is not "documentation for humans." It is the durable steering mechanism that keeps any assistant convergent across time, regardless of which module it's working on or which session it's in.</p>
+<h3>Layer 3: Procedures (repeatable workflows)</h3>
+<p>Procedures exist to eliminate "go and remember how we do this."</p>
+<p>If a check must happen every time — before a commit, before publishing, after a refactor — encode it as a repeatable workflow: what to read, what to verify, what to update, in what order.</p>
+<p>Procedures reduce cognitive load on both the human and the assistant. The goal is consistent execution without relying on memory. A procedure that exists only in someone's head fails the first time that person is unavailable.</p>
+<h3>Layer 4: Gates (automated enforcement)</h3>
+<p>This is what converts governance from advisory to structural.</p>
+<p>A governance rule without a failure signal is a preference. A preference can be acknowledged and then displaced by task pressure. A gate cannot be forgotten because it lives outside the assistant's context window — in the test suite, the build, the automation.</p>
+<p>Gates make governance self-correcting:
+- the build fails when drift appears
+- the assistant receives an unambiguous signal that "done" is not yet true
+- the human does not need to police every rule manually</p>
+<p>When you have gates, the assistant doesn't need to remember the rule. It learns the rule is real because violating it causes a failure it has to resolve before proceeding.</p>
+<h2>The PRD as a Durable Contract</h2>
+<p>A specific governance failure deserves attention: PRDs that describe implementation strategy rather than intent.</p>
+<p>When a PRD specifies <em>how</em> a thing is built — the specific classes, the call sequence, the data shapes — it rots the moment you refactor. A future assistant reads the stale "how," believes it, and reintroduces outdated architecture in good faith.</p>
+<p>A more durable contract specifies:
+- why the module exists (the problem it solves)
+- what constraints must always hold (the invariants that survive implementation changes)
+- what "done" looks like in observable terms (outputs, interfaces, acceptance criteria)
+- what evidence is required before a claim can be treated as proven</p>
+<p>This keeps the spec stable while the implementation evolves. The assistant can make implementation decisions freely, as long as the observable contract is satisfied.</p>
+<p>The test for a good PRD: could you refactor the entire implementation and still use the same PRD? If yes, it captures intent. If the refactor would break the PRD's accuracy, it captures approach — and approach is the wrong thing to capture in a governance document.</p>
+<h2>The Practical Test for Governance</h2>
+<p>There is a direct test for whether you have governance or just session safety.</p>
+<p>Close every open chat session. Start a new session with a different assistant — one that has never seen your prior conversations. Point it at the repository. Ask it to continue work on an active task.</p>
+<p>If it produces consistent, constraint-honouring work from the repository contracts alone, you have governance.</p>
+<p>If it starts making decisions that contradict rules you thought were established, you have session memory — and the rules only exist as long as the session does.</p>
+<p>This is also the test for whether the system survives a machine change, a tool upgrade, or bringing in a new collaborator. Governance that lives in the repository transfers automatically. Everything else has to be re-established manually.</p>
+<h2>What Changes When Governance Is in Place</h2>
+<p>The human operator's role shifts.</p>
+<p>Without governance: the human supervises every output, polices every rule manually, and re-establishes context at the start of every session.</p>
+<p>With governance: the human designs the system that makes outputs verifiable. The rules are in the files. The gates enforce them. The contracts define "done." Review becomes about verification against observable criteria, not about trust calibrated through accumulated conversation.</p>
+<p>The assistant's relationship to constraints changes too. It does not "stay correct" by remembering rules from prior sessions. It stays correct by passing gates. When a constraint fails, the failure signal is unambiguous. When a session starts fresh, the contract is available to load from the repository without relying on chat history.</p>
+<p>Plan Mode can still be useful in specific moments: when you are introducing a new invariant that doesn't yet have a gate, or when you are genuinely unfamiliar with an area and need a map before choosing a design. As a technique, it has value.</p>
+<p>As a default posture — as the primary safety mechanism for long-lived work — a session permission mode is a fragile foundation. It does not survive resets. If you want autonomy, you want a system where the plan already exists in the files. Then every session, with every tool, starts from the same authoritative source.</p>
+<h2>A Note on How This Was Built</h2>
+<p>The governance model described here was not designed from first principles. It emerged from failure. The constraints that now live in repo-backed documents were first discovered as missing when a different assistant produced inconsistent work — and the only explanation was that the rule existed in one tool's local memory and nowhere else.</p>
+<p>The four-layer model is the structured version of what was learned from building a long-running multi-assistant project: what needed to be in one place, what could be delegated, what had to be automated, and what could not be trusted to memory alone.</p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
+
+</body>
+</html>

@@ -3,91 +3,33 @@
 <body>
 
 <h1>Plan Mode Isn't Governance (And Governance Is What Scales)</h1>
-<p>“Plan first” is good advice.</p>
-<p>Treating a session permission mode as your primary safety mechanism is not.</p>
-<p>If you work with AI coding assistants on anything larger than a one-off script, your dominant risks aren’t “the assistant started coding too early”. They’re cross-session drift, cross-assistant inconsistency, and the slow dilution of constraints as chats get long and summarised.</p>
-<p>Plan Mode helps inside a session. Governance is what survives across sessions.</p>
-<p>This article explains the difference, why it matters, and what to build instead.</p>
-<h2>What Plan Mode Actually Solves</h2>
-<p>In the most common workflow, planning lives inside chat:</p>
-<ol>
-<li>Ask for a change</li>
-<li>The assistant proposes an approach</li>
-<li>You confirm or correct it</li>
-<li>The assistant implements</li>
-</ol>
-<p>Plan Mode is a useful optimisation here because it reduces wasted write/undo cycles. It forces the assistant to stop and think before it edits files.</p>
-<p>If your only control is “human reviews the diff”, a read-only planning phase is sensible.</p>
-<h2>The Failure Modes Plan Mode Doesn’t Touch</h2>
-<p>Plan Mode is fundamentally session-scoped. It does not solve:</p>
-<ul>
-<li><strong>Cross-session drift</strong>: a later session reintroduces an old pattern because the assistant “forgot” the constraint</li>
-<li><strong>Cross-assistant inconsistency</strong>: different tools produce different architectural styles because their “memory” isn’t shared</li>
-<li><strong>Compaction dilution</strong>: the longer the chat, the more subtle constraints are summarised away</li>
-<li><strong>Token burn by context bloat</strong>: loading “everything” lowers precision and increases cost</li>
-</ul>
-<p>These are the problems that break long-lived AI-assisted work.</p>
-<p>If you rely on a single chat as the system of record, you will keep re-planning the same work, re-discovering the same constraints, and re-fixing the same regressions.</p>
-<h2>Planning Is a Principle; Where It Lives Is a Design Choice</h2>
-<p>This is the distinction most “plan first” guidance does not make:</p>
-<ul>
-<li>Planning is a principle: understand before changing</li>
-<li>Plan Mode is one implementation surface: chat-state gating</li>
-</ul>
-<p>If you want planning to scale, you need a durable surface that outlives the session.</p>
-<p>That surface is not a mode. It’s the repository.</p>
-<h2>What Replaces “Plan Mode as Default”</h2>
-<p>Governance-first AI development treats planning as a system property enforced by four things:</p>
-<h3>1) A durable contract layer</h3>
-<p>You need a small set of documents that define how work must be done:</p>
-<ul>
-<li>the non-negotiable pillars and boundaries</li>
-<li>the workflow triggers (what must be updated when)</li>
-<li>the conventions that prevent architectural drift</li>
-</ul>
-<p>This is not “documentation for humans”. It is the durable steering mechanism that keeps any assistant convergent across time.</p>
-<h3>2) PRDs that capture intent, not approach</h3>
-<p>PRDs rot when they describe implementation strategy. A future assistant reads the stale “how”, reintroduces it, and you get inconsistency across modules.</p>
-<p>PRDs stay durable when they capture:</p>
-<ul>
-<li>why the module exists</li>
-<li>what constraints must hold</li>
-<li>what outputs/contracts define “done”</li>
-<li>what evidence makes claims publishable</li>
-</ul>
-<p>The approach belongs in the shared governance layer, maintained once, not duplicated per module.</p>
-<h3>3) Executable gates</h3>
-<p>A rule without a failure signal is a preference.</p>
-<p>If you care about preventing drift, encode it as something that fails fast:</p>
-<ul>
-<li>a check that prevents accidental broad rewrites</li>
-<li>a gate that enforces doc alignment</li>
-<li>a drift test that stops “summary truth” diverging from reality</li>
-</ul>
-<p>This is what makes governance automatic. It does not rely on an assistant remembering what you meant last week.</p>
-<h3>4) A session model designed for long backlogs</h3>
-<p>Long-running work is not best done in one never-ending chat.</p>
-<p>A better operating model is:</p>
-<ul>
-<li>new session per bounded backlog item</li>
-<li>durable checkpoint notes written into the backlog document</li>
-<li>accumulated constraints explicitly forwarded</li>
-</ul>
-<p>Planning still happens. It’s just captured in a form that survives.</p>
-<h2>The Practical Test</h2>
-<p>If you can close every chat session, start a new one with a different assistant, and still get consistent work by pointing at the repo contracts, you have governance.</p>
-<p>If you cannot, you are relying on session memory and implicit planning.</p>
-<p>Plan Mode can still be useful as a technique in specific moments:</p>
-<ul>
-<li>when you are introducing a new invariant that doesn’t yet have a gate</li>
-<li>when you are genuinely unfamiliar with an area and need a map before choosing a design</li>
-</ul>
-<p>But as a default posture, a session permission mode is a weak place to store safety.</p>
-<p>If you want autonomy, you want a system where the plan is already in the files.</p>
-<h2>The Point</h2>
-<p>Plan first is correct.</p>
-<p>Planning trapped inside a session is not durable.</p>
-<p>If you want AI assistants to work safely across weeks, across tools, and across machines, build governance that survives the session.</p>
+<p>Image created by the author using Midjourney</p>
+<p>Every article and video I found on AI coding assistants said the same thing: plan first, then build. Use plan mode, review the approach, then let the assistant implement.</p>
+<p>I tried it. The plan was useful — until I hit a rate limit, ran out of context, or needed to switch to a different agent. At that point I'd copy the plan mode output into a new session, rebuild context, and pick up where I left off.</p>
+<p>I did this enough times that it stopped feeling like a workflow and started feeling like the problem.</p>
+<h2>What I do instead</h2>
+<p>Plan mode was generating the plan in the right place for one session. It was never designed to survive the session ending.</p>
+<p>So I stopped using it. Instead I forced the agent to externalise everything: a PRD built from my intent, a backlog catalog the agent could read cold in any session, a checkpoint written back before closing. The next session opens, reads the backlog, picks up exactly where the last one left off.</p>
+<p>I've worked through multi-day refactors this way — swapping between Claude Code, Trae, and Qwen Code as rate limits hit, across sessions that stretched over days. The work stayed consistent. Not because I had a good plan at the start, but because the plan was always in the files.</p>
+<h2>Why plan mode makes complex work harder</h2>
+<p>Plan mode solves one thing: it stops the assistant from writing code before you've agreed on an approach. Reasonable guard inside a simple workflow — ask for a change, approve the plan, let it implement.</p>
+<p>For anything more complex, that workflow breaks down before plan mode even comes into play.</p>
+<p>I've had implementations that required rework across multiple modules — not because the approach was wrong, but because one design decision had cross-cutting implications that only surfaced mid-build. A planning conversation at the start of a session wouldn't have caught that. What it would have done is consume context: the plan sits in the same window as the implementation, and as the session grows, quality erodes. Not because the plan was wrong — because there isn't enough room left to execute it well.</p>
+<p>Plan mode is session-scoped. It scales to session-sized problems.</p>
+<h2>What makes the workflow hold</h2>
+<p>The contract layer comes first. A small set of documents defines how work must be done: the non-negotiable constraints, the conventions that prevent drift, the triggers that govern what gets updated when. Not documentation for humans — the steering mechanism that keeps any assistant convergent, regardless of which session or which tool.</p>
+<p>PRDs hold when they capture intent rather than approach. They rot when they describe implementation strategy — or at least they do once the implementation starts moving. A future session reads the stale "how", reintroduces it, and you get inconsistency across modules. What holds is capturing why the module exists, what constraints must hold, what "done" means. In practice: I define intent, the agent builds the PRD and the backlog from it.</p>
+<p>Sessions are scoped to bounded work, not long runs. A series of short sessions, each covering one backlog item, each writing a checkpoint before closing — accumulated constraints forwarded explicitly. The session ends; the knowledge doesn't.</p>
+<h2>The thing that changed how I think about this</h2>
+<p>I had a gate catch a drift I would have reviewed as a clean diff. A check that ran automatically, failed fast, and surfaced something I'd have missed in review.</p>
+<p>That's when the governance layer stopped feeling like overhead and started feeling like enforcement. A rule without a failure signal is just a preference. Encode it as something that fails fast, and it holds regardless of context length or which assistant you're using.</p>
+<h2>The practical test</h2>
+<p>Close every session. Start a new one with a different assistant, point it at the repo contracts. Consistent work across that boundary means you have governance. Anything less and you're relying on session memory.</p>
+<p>Plan mode works for small, self-contained asks — a single session, no cross-module implications. In practice it has never come up for anything more complex than that. For cross-cutting work it makes things worse: the planning conversation consumes context the implementation needs, and quality degrades before you're halfway done.</p>
+<h2>The point</h2>
+<p>Planning is a principle: understand before changing. Plan mode is one implementation surface — a chat-state gate. If you want the principle to scale, it needs a surface that outlives the session.</p>
+<p>The plan should already be in the files.</p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
 
 </body>
 </html>

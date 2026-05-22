@@ -1,25 +1,22 @@
-We almost fine-tuned a model on an internal policy document to “make it know our policies”.
+We almost fine-tuned a model on an internal policy document to "make it know our policies".
 
-That would have been the most expensive way to get the wrong failure mode: answers that sound authoritative, but have no provenance.
+The failure mode that would have created: answers that sound authoritative, with no provenance. An expensive way to get it wrong.
 
-Here’s the distinction that prevents a lot of wasted effort:
+Fine-tuning teaches the model how to speak. Retrieval gives it something accurate to say.
 
-Fine-tuning trains the voice. Retrieval retrieves the facts.
+Use fine-tuning when behaviour is the problem. Use RAG when knowledge is missing and needs to be cited.
 
-Use fine-tuning when the thing that is broken is behaviour. Use RAG when the thing that is missing is knowledge you need to cite with provenance.
+If traceability matters (governance, compliance, architecture decisions), you're in retrieval territory. Training doesn't give you citations.
 
-If your use case needs traceability (governance, compliance, architecture decisions), you are already in retrieval territory. Training does not give you citations.
+Considering training because retrieval "isn't good enough"? Fix retrieval first (chunking, metadata, evaluation), then reassess.
 
-If you’re considering training because retrieval “isn’t good enough”, fix retrieval first (chunking, metadata, evaluation), then reassess.
-
-The practical selection rule:
+Selection guide:
 
 - Need facts from documents that change? Use RAG.
-- Need consistent behaviour (tone, format, routing) at production scale? Consider fine-tuning (or a prompt harness).
-- Already have the right material for this specific task? Use context injection and be deliberate about scope.
+- Need consistent behaviour (tone, format, routing) at scale? Consider fine-tuning or a prompt harness.
+- Already have the right material for this task? Use context injection.
+- Need deterministic output structure? That's an engineering wrapper. Fine-tuning shapes tendencies; a validator enforces the schema.
 
-One more: if you need mandatory structure and completeness, that’s an engineering constraint problem. Fine-tuning can shape tendencies, but it cannot enforce a schema without a wrapper that validates sections and retries thin output.
-
-Also: treat fine-tuning like a model release. It can degrade capability outside the target behaviour, so regression-test the tasks you still care about.
+Treat fine-tuning like a model release. It can degrade capability outside the target behaviour, so regression-test the tasks you still care about.
 
 #AI #RAG #SoftwareArchitecture #MachineLearning #LLM

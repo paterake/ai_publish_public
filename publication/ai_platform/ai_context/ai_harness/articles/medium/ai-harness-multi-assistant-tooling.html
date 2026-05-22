@@ -3,33 +3,32 @@
 <body>
 
 <h1>Your AI Coding Assistant Rules Are Invisible to All Your Other AI Coding Assistants</h1>
+<p>Image created by the author using Midjourney</p>
 <p><em>How a shared harness keeps three AI tools in sync from a single source of truth — without a synchronisation step</em></p>
-<p>Three AI coding assistants. Three separate tool config directories. Three different sets of rules — each growing independently, none visible to the others.</p>
-<p>This is what the standard setup produces the moment you add a second AI tool to a codebase already configured for one. A rule written for one assistant lives in that assistant’s tool-specific folder. The other tools do not see it. A hook written for another tool does not run when the first assistant is active. A skill built for one tool needs to be manually copied and maintained for the others.</p>
+<p>I run three AI coding assistants against the same repository: Claude Code, Qwen Code, and Trae — with actual code execution running locally on Qwen3.5:9b via Ollama, because the data cannot leave the machine.</p>
+<p>The architecture behind that was not planned. It was engineered before a problem occurred, not after one.</p>
+<p>When I was ready to add Qwen Code to a codebase already configured for Claude Code, I stopped before copying the configuration directory. The question that stopped me was not "how do I do this?" It was: <em>what happens when these diverge?</em></p>
+<p>The harder follow-on: what survives if the machine dies? A configuration that lives only in a tool-local directory disappears on reinstall, tool switch, or machine wipe. I had already invested significant time in Claude Code’s rule set, hooks, and skills. Copying that to Qwen Code meant two copies to maintain indefinitely, with no mechanism to keep them in sync.</p>
+<p>The instinct was DRY applied to AI tooling: if I am writing two copies, I am doing it wrong. The right approach was to write it once in a form every tool could share — and commit it to git, so recovery from machine loss is one command.</p>
+<p>By default, each tool comes with its own configuration directory: its own rules, its own hooks, its own skills. The moment you add a second assistant to a codebase already configured for one, you now have two separate sources of truth. Add a third, and you have three.</p>
+<p>A rule written for Claude Code lives in Claude Code’s tool-specific folder. Qwen Code and Trae do not see it. A hook registered for Trae does not run when Claude Code is active. A skill built for Qwen Code needs to be manually copied (and kept current) for the others.</p>
 <p>The divergence is not immediately obvious — because each assistant believes it is following the current rules. None of them are following the same rules. Silent divergence is structurally worse than one badly-configured assistant, because at least a single bad configuration is visible.</p>
 <p>This article describes what changes when you treat assistant configuration as shared infrastructure rather than per-tool setup — and how three enforcement layers keep everything in sync without a synchronisation step.</p>
-<p><strong>Credibility signal:</strong> The setup described here runs three assistants concurrently on a live codebase: Claude as primary architect, Qwen3.5:9b as local synthesis LLM and pipeline worker, and Trae as IDE assistant. Recovery from a full machine wipe requires one command: <code>git clone</code>.</p>
-<h2>Key takeaways</h2>
+<h2>In this article</h2>
+<p>If you run more than one AI coding assistant on the same project, this is the failure mode you inherit by default — and the architecture that removes it.</p>
 <ul>
-<li>A tool-specific root instruction file that only redirects to shared context makes multi-assistant parity achievable without per-tool maintenance.</li>
-<li>Symlinks from each assistant's native directory to one shared harness give all three tools identical skills, hooks, and rules from a single git source.</li>
-<li>Three awareness layers — session context, task-type routing, and file-type rules — create a redundant activation system: when one signal is missed, another catches it.</li>
-</ul>
-<h2>Who this is for</h2>
-<p>Developers running more than one AI coding assistant on the same project, or planning to. Also: developers who have built a well-tuned single-assistant setup and want to understand what changes when you add a second tool, a new team member, or need to rebuild from scratch.</p>
-<h2>What you'll learn</h2>
-<ul>
-<li>Why per-tool configuration breaks silently and how to detect the divergence before it causes damage</li>
+<li>Why per-tool configuration breaks silently and how to detect divergence before it causes damage</li>
 <li>The symlink pattern that gives all assistants identical behaviour from a single git-tracked location</li>
 <li>How three enforcement layers work together so that missing one signal does not mean the constraint goes unenforced</li>
 </ul>
 <h2>The naive approach and where it breaks</h2>
 <p>The best-published guides for a single assistant describe a well-considered setup: a lean root instruction file, path-scoped rules loaded by file glob, custom skills, hooks, and a curated tool list. That architecture is sound — for one operator and one assistant.</p>
 <p>The problem is the assumption it encodes. All of it lives in a tool-specific folder. Configuration written for one assistant is tool-specific by definition. Add a second tool. Add a third. Each accumulates its own directory. Each grows its own rules. None of them share anything.</p>
-<p>In practice this produces three failure modes:</p>
+<p>Operationally, this produces four failure modes:</p>
 <p><strong>Skill duplication.</strong> A skill built for one assistant does not exist for the others. When those assistants attempt the same task, they improvise.</p>
 <p><strong>Rule fragmentation.</strong> A constraint written for one tool does not run when another tool makes the same edit. The constraint protects one session. The failure remains possible in all others.</p>
 <p><strong>Silent divergence.</strong> Over weeks, each config evolves separately. No assistant knows the others exist. No test detects that they have drifted. This is the worst failure mode: each session gives slightly different results depending on which tool you open, and the cause is invisible.</p>
+<p><strong>Forced context loss.</strong> You don't always choose to switch — rate limits make the decision for you. Hit a threshold mid-session and you're in Qwen Code before you've recorded what Claude Code established. The new assistant has no access to what the previous one worked out. It rebuilds from scratch: same exploration, same tokens, same results you had an hour ago.</p>
 <h2>The inversion: a tool-specific root file as a redirect</h2>
 <p>The simplest change has the most structural consequence.</p>
 <p>The root instruction file for each assistant in this project is:</p>
@@ -53,7 +52,29 @@
 <li><code>rules/</code> → symlink to <code>&lt;shared-harness&gt;/rules</code></li>
 </ul>
 <p>The pattern repeats identically for every assistant: one local settings file, three symlinks to the same shared source.</p>
-<p>The tool settings file is the only thing that varies per assistant. It holds tool-specific configuration: permission allowlists, hook registration syntax, and other settings. Everything that governs actual behaviour — the skills, hooks, and rules — lives once and is shared.</p>
+<p>The tool settings file is the only thing that varies per assistant. It is boring by design. That is the point. It holds tool-specific configuration: permission allowlists, hook registration syntax, and other settings. Everything that governs actual behaviour — the skills, hooks, and rules — lives once and is shared.</p>
+<p>Concretely, the repo ends up with a shape like this:</p>
+<pre><code class="language-text">ai_context/
+  ai_harness/
+    skills/
+    hooks/
+    rules/
+.claude/
+  settings.json
+  skills -&gt; ../ai_context/ai_harness/skills
+  hooks  -&gt; ../ai_context/ai_harness/hooks
+  rules  -&gt; ../ai_context/ai_harness/rules
+.qwen/
+  settings.json
+  skills -&gt; ../ai_context/ai_harness/skills
+  hooks  -&gt; ../ai_context/ai_harness/hooks
+  rules  -&gt; ../ai_context/ai_harness/rules
+.trae/
+  settings.json
+  skills -&gt; ../ai_context/ai_harness/skills
+  hooks  -&gt; ../ai_context/ai_harness/hooks
+  rules  -&gt; ../ai_context/ai_harness/rules
+</code></pre>
 <p>Adding a new skill requires one change. All assistants see it immediately on their next session start. No synchronisation step. No forgetting to update two of the three.</p>
 <p>The symlinks are committed to the repository. Cloning the repo gives you the full harness — no bootstrap script, no manual setup.</p>
 <h2>Hooks: deterministic guardrails</h2>
@@ -69,6 +90,7 @@
 </code></pre>
 <p>After every write or edit to a Python file, an auto-formatter runs silently. The file is clean before the next turn. The assistant never accumulates formatting debt or gets confused by its own inconsistent indentation.</p>
 <p>The <code>|| true</code> is deliberate: if ruff is unavailable, the session continues. The hook degrades gracefully rather than blocking work.</p>
+<p>The practical effect: the assistant can stay focused on implementation while diffs stay small, consistent, and reviewable.</p>
 <h3>PreToolUse — Git push gate</h3>
 <pre><code class="language-bash">#!/usr/bin/env bash
 set -euo pipefail
@@ -88,11 +110,12 @@ esac
 </code></pre>
 <p>Any command matching a push to <code>main</code> is blocked and requires explicit human approval. All other commands pass through immediately.</p>
 <p>The gate is a shell script rather than an inline command — auditable, editable, version-controlled. Adding a new gate (deferring force-pushes, production deploys) is a single-line change in one file that immediately applies to every assistant session.</p>
+<p>The practical effect: you can run fast locally without giving any assistant an easy path to irreversible remote changes.</p>
 <p>Both hooks live in the shared harness and are shared across all assistants via the symlink pattern.</p>
 <h2>Three awareness layers</h2>
 <p>The harness enforces the same project standards through three overlapping layers. The design is deliberately redundant: when one signal is missed, another catches it.</p>
-<p><strong>Layer 1 — Session context.</strong> At session start, the assistant reads the assistant handbook. It knows what the project is, what each folder contains, and where to look for task-specific guidance. This is the "what exists" layer — passive awareness established once per session.</p>
-<p><strong>Layer 2 — Task-type routing.</strong> The shared assistant handbook contains a "Load when" router: a table mapping task types to the minimum set of documents to load. For example: "If you are debugging a retrieval failure, load the retrieval design notes and the lessons log first." This is the "what to load" layer — it prevents loading irrelevant context that happens to share a directory with the edited file.</p>
+<p><strong>Layer 1 — Session context.</strong> At session start, the assistant reads the assistant handbook. It gets oriented quickly, by design. It knows what the project is, what each folder contains, and where to look for task-specific guidance. This is the "what exists" layer — passive awareness established once per session.</p>
+<p><strong>Layer 2 — Task-type routing.</strong> The shared assistant handbook contains a "Load when" router: a table mapping task types to the minimum set of documents to load. For example: "If you are debugging a retrieval failure, load the retrieval design notes and the lessons log first." This is the "what to load" layer. It is also a brake.</p>
 <p>A task-type router differs from a file-type rule in an important way: it fires based on <em>intent</em>, not file path. An assistant working on LLM config tuning should not load the publication workflow rules just because the config YAML lives near a publishing reference. The router makes the loading decision explicit.</p>
 <p><strong>Layer 3 — File-type rules.</strong> Path-scoped rule files in the shared harness fire automatically when the assistant edits a file matching a glob pattern — without requiring the assistant to remember. This is tool-side enforcement, not assistant-compliance.</p>
 <p>Five rule categories cover the project:</p>
@@ -117,7 +140,9 @@ esac
 <p>The best-published single-assistant guides describe a sound setup. A few specific divergences are worth naming because they are non-obvious from first principles.</p>
 <p><strong>Git is the durable memory; local memory is explicitly ephemeral.</strong> Single-assistant guides use the tool's local project memory as a primary store. This project inverts the architecture: a shared context folder in git is the durable memory; the local memory layer holds only in-flight state — active blockers, open run IDs, architectural decisions still being evaluated. Once a decision settles, it moves to the shared context and the local entry is deleted. The boundary is documented; the consequence is tested recovery with near-zero context loss.</p>
 <p><strong>Context management is architecture, not advice.</strong> The published guides offer the tip "keep your root instruction file under 200 lines." That is good advice. This project encodes the same principle structurally: every shared context file has an explicit "Load when" condition. A file without a load condition is context bloat. The rule is not "be disciplined" — it is "the system is shaped so that loading the wrong thing requires deliberate effort."</p>
-<p><strong>Plan Mode was explicitly rejected.</strong> The published guides recommend Plan Mode as a default posture for multi-file changes. This project reviewed that recommendation and rejected it — with documented reasoning. When the context corpus is complete and well-structured, an assistant that reads the task-appropriate files before acting does not need a separate planning phase. Adding a planning tier on top creates ceremony without adding safety — the safety comes from the contracts, not from the planning step.</p>
+<p><strong>Plan Mode was explicitly rejected.</strong> The published guides recommend Plan Mode as a default posture for multi-file changes. This project reviewed that recommendation and rejected it — with documented reasoning.</p>
+<p>In effect, it encouraged deferring edits until a “perfect plan” appeared, while the real safety controls still lived in contracts and gates.</p>
+<p>The cost shows up in later sessions. When the context corpus is complete and well-structured, an assistant that reads the task-appropriate files before acting does not need a separate planning phase. Adding a planning tier on top creates ceremony without adding safety — the safety comes from the contracts, not from the planning step.</p>
 <h2>Tuned vs. governed</h2>
 <p><strong>Single-assistant tuning</strong>
 - Memory model: tool-specific local memory
@@ -138,21 +163,19 @@ esac
 <h2>Recovery: the machine wipe test</h2>
 <p>The final test for any AI configuration architecture is what survives a machine wipe.</p>
 <p>With a tuned single-assistant setup that relies on tool-local memory: you lose weeks of accumulated rules and corrections. Some of it may be reconstructable from the root config file; most of it is gone.</p>
-<p>With this setup:</p>
+<p>This was tested. Both Claude Code and Trae were fully uninstalled and their local config directories deleted (<code>rm -rf ~/.claude</code>, <code>rm -rf ~/.trae</code>). After reinstalling:</p>
 <pre><code class="language-bash">git clone &lt;repo&gt;
 # The harness configuration is committed — no setup script needed
 </code></pre>
-<p>One command. Every skill, hook, rule, and operating constraint is there. No bootstrap script. No manual configuration step. No rebuilding from memory.</p>
+<p>Both tools resumed immediately — same skills, same hooks, same rules. No loss. No penalty. No rebuilding from memory.</p>
 <p>The harness is a git artefact, not a session artefact. It survives anything the session does not.</p>
 <h2>Limits / when not to use</h2>
 <p><strong>Single-assistant setups.</strong> If you use one AI coding assistant and have no plans to add a second, the overhead of this architecture is not justified. A well-maintained root instruction file is sufficient.</p>
 <p><strong>Short-lived projects.</strong> The harness pays off over months, not days. The investment in a shared context directory, a contract test, and the symlink pattern is worthwhile for projects with ongoing development. For a two-week prototype, it is not.</p>
 <p><strong>When assistants do not share git access.</strong> The symlink pattern requires all assistants to operate in the same git clone. If assistants are running against different clones or branches, the pattern does not apply directly.</p>
 <p><strong>Single-concern codebases.</strong> The task-type router in the assistant handbook is most valuable when the codebase has multiple concerns — retrieval, visualisation, publication, operations. If the codebase is a single module, the router has one entry and the value is minimal.</p>
-<h2>Repro notes</h2>
-<p>Run conditions: multiple assistants operate locally on macOS against the same git clone. Hooks register in each tool’s settings file with tool-specific syntax but execute the same shared shell scripts from the harness.</p>
 <p>The symlink is not a clever trick. It is the right data model for shared infrastructure: authored once, consumed by all.</p>
-<p><em>Tags: Software Engineering, Artificial Intelligence, Developer Tools, Software Architecture, Claude</em></p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
 
 </body>
 </html>

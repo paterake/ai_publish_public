@@ -2,132 +2,217 @@
 <html>
 <body>
 
-<h1>The AI That Builds Your System Is Not the AI That Runs Inside It</h1>
-<p><em>Same model, two roles — and a governance category error that quietly breaks both</em></p>
-<p>I use AI in two places at once.</p>
-<p>One AI helps me build the system: it reads requirements, proposes code changes, and refactors modules.</p>
-<p>Another AI runs <em>inside</em> the system: it classifies, retrieves, scores, and decides whether the evidence is good enough to proceed.</p>
-<p>In many projects those two things get blurred into one phrase: “we’re using AI”.</p>
-<p>That blur creates a category error.</p>
-<p>The governance you need for a coding assistant is not the governance you need for a production pipeline model. If you apply the wrong discipline to the wrong role, you get one of two outcomes:</p>
+<h1>The LLM that builds your system is not the LLM that runs inside it</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>When cloud coding assistants (Claude Code / Trae / Qwen Code) can’t touch your data, LLMOps gives them the evidence trail to iterate on a local LLM system without seeing the data.</em></p>
+<p>I use LLMs (generative AI) in two places at once.</p>
+<p>One LLM helps me build the system. It reads requirements, proposes code changes, and refactors modules.</p>
+<p>Another LLM runs <em>inside</em> the system. It classifies, retrieves, scores, and decides whether the evidence is good enough to proceed.</p>
+<p>In my case, those roles are split deliberately. The build loop uses cloud coding assistants, while the run loop uses local LLMs via Ollama (for example qwen2.5:7b, qwen3.5:9b, plus a local embedder like nomic-embed-text). The workload processes real operational data, and the constraint is "data stays inside the system", so the cloud assistants can’t execute the pipeline against that data.</p>
+<p>The cloud models don’t even <em>see</em> the raw inputs or the raw outputs. They only see the LLMOps evidence: run IDs, manifests, summaries, and telemetry. That lets the builder make calibrated decisions from deterministic signals (typed errors, budgets, validation gates, cache behaviour, latency, token/cost estimates) without pushing sensitive data to the cloud just to establish correctness.</p>
+<p>This wasn’t an "aha" moment or a reaction to a problem. It was a deliberate architecture: build in the cloud, run locally, and connect the two with an evidence trail that the build-side assistants can read. The system didn’t become production-ready by luck or by a single prompt. It became production-ready because the assistants could route from local run results back into code or config, then re-run until the outputs were bounded, validated, and repeatable.</p>
+<p>This article is about what happens when you connect those two loops.
+It’s about <strong>AI building a system that itself depends on an LLM</strong>, then iterating against real runs:</p>
 <ul>
-<li>You add ceremony to development and still miss real production risks.</li>
-<li>Or you accept “assistant-style” looseness in a pipeline and wake up to silent wrong answers.</li>
+<li>run the pipeline against a local model</li>
+<li>review a run summary and correlated telemetry via a run ID</li>
+<li>adjust code or runtime parameters (temperature, top‑p, top‑k, whether the model’s "thinking mode" is enabled)</li>
+<li>tune caching and rerun</li>
 </ul>
-<p><strong>Credibility signal:</strong> In this setup, the same local model (Qwen3.5:9b) can play both roles. What changes is not the model. It’s the governance around it.</p>
-<h2>Key takeaways</h2>
+<p>In many projects those two things get blurred into one phrase: "we’re using AI".</p>
+<p>That blur creates a role mix-up.</p>
+<p>The controls you need for a coding assistant are not the controls you need for a pipeline model. The roles fail in different ways. If you apply development-style assumptions to the pipeline role (or production-style approval overhead to the developer role), you get predictable failure modes:</p>
 <ul>
-<li>“AI” is not a single thing. Role determines the failure modes, and failure modes determine governance.</li>
-<li>Developer AI is interactive and human-adjudicated; worker AI is batch, unattended, and must be bounded.</li>
-<li>The safest systems treat governance as a control surface you apply to a role, not a property of a model.</li>
+<li>You add approval gates and change tickets to development and still miss real production risks.</li>
+<li>Or you accept "assistant-style" looseness in a pipeline and ship silent wrong answers.</li>
 </ul>
+<p>In my setup, cloud coding assistants build and review, while local models run via Ollama. That split is driven by data constraints. The controls that matter are the ones that let the builder review local execution safely: run artefacts, bounded runs, and correlated telemetry.</p>
+<p>By "LLMOps" I mean the execution trace contract the system emits on every run so the builder can review what happened without moving the data or replaying the run.
+In practice it’s a small set of artefacts that fit together:</p>
+<ul>
+<li>a run ID (<code>run_id</code>) that correlates artefacts for a single execution</li>
+<li>a per-run manifest (status, timings, fingerprints, typed errors, degrade mode)</li>
+<li>structured telemetry keyed by <code>run_id</code> (latency, token/cost estimates, cache hits, error types, trace IDs)</li>
+<li>a derived run review that rolls up warnings and points you at the exact artefacts to inspect</li>
+</ul>
+<p>In this article, "assistant" means the LLM plus its harness (tools, rules, and deterministic gates). I avoid "agent" here because, elsewhere, "agent" often implies an autonomous tool-loop running inside the system.</p>
 <h2>A simple distinction that changes everything</h2>
-<p>Most teams treat “using AI” as a technology choice. In practice it’s a <em>control choice</em>.</p>
-<p>There are two roles:</p>
-<p><strong>Developer AI</strong> — writes and changes the system
-- Interaction: one turn at a time
-- Human in the loop: always
-- Primary failure mode: bad suggestion — visible
-- Governed by: session contracts + review gates</p>
-<p><strong>Worker AI</strong> — runs inside the system
-- Interaction: loops in a pipeline
-- Human in the loop: rarely
-- Primary failure mode: silent wrong output — invisible
-- Governed by: budgets + observability + degrade modes</p>
-<p>The trap is assuming that because both are “LLMs”, they should be governed the same way.</p>
-<p>They shouldn’t.</p>
-<h2>The developer AI: the point is not correctness, it’s controllability</h2>
+<p>Most teams treat "using AI" as a technology choice. In practice it’s a loop design choice: who runs what, where the data is allowed to go, and how you review execution.</p>
+<p>I treat them as two different roles.</p>
+<p>Developer AI writes and changes the system. The loop is interactive: it proposes; I accept or reject; tests and hooks do the enforcing. When it’s wrong, it’s wrong in public.</p>
+<p>Worker AI runs inside the system. The loop is unattended: retries, timeouts, and "looks fine" outputs can slip through unless you box it in with budgets, observability, degrade modes, and validation at the boundary.</p>
+<p>The trap is that because both are "LLMs", the natural instinct is to treat them as needing the same constraints.</p>
+<p>They don’t.</p>
+<h2>The developer AI: optimise for controllability</h2>
 <p>A coding assistant is allowed to be wrong in a way production systems are not.</p>
-<p>That is not because the stakes are lower. It’s because the <em>control loop</em> is different:</p>
+<p>The <em>control loop</em> is different:</p>
 <ul>
 <li>A developer AI proposes.</li>
-<li>A human adjudicates.</li>
+<li>A human reviews and accepts or rejects.</li>
 <li>The codebase’s tests and hooks enforce deterministic guardrails.</li>
 </ul>
-<p>The safety property doesn’t come from the assistant “being careful”. It comes from the fact that the assistant cannot ship anything without passing through multiple deterministic gates.</p>
+<p>The safety property doesn’t come from the assistant "being careful". It comes from the fact that the assistant cannot ship anything without passing through multiple deterministic gates.</p>
 <p>Here’s a concrete example of a gate that matters more than any prompt:</p>
 <ul>
 <li>If a command looks like a push to the default branch, the session defers and requires human approval.</li>
 </ul>
-<p>That is governance as executable policy.</p>
-<p>It doesn’t need the assistant to remember a rule.
-It doesn’t need the assistant to “agree”.
-It makes a dangerous action structurally harder than a safe one.</p>
-<p>Most “AI governance” discussions skip this point. They focus on behaviour. In practice, safety comes from <em>enforcement surfaces</em>.</p>
-<h2>The worker AI: the point is not intelligence, it’s bounded execution</h2>
-<p>When a model runs inside a pipeline, your biggest risk is not that it produces a low-quality paragraph.</p>
-<p>Your biggest risk is that it behaves like an unbounded subsystem:</p>
-<ul>
-<li>retries forever</li>
-<li>times out invisibly</li>
-<li>returns an empty answer that looks like a legitimate “not found”</li>
-<li>burns budget without producing evidence</li>
-</ul>
+<p>The assistant has no choice about it. The gate makes a high-risk action structurally harder than a safe one.</p>
+<p>Most AI safety writing focuses on model behaviour — prompts, alignment, making the model more careful. But that gate doesn't ask the model to be careful. It just blocks the action. That's the thing that changed how I build: less about whether the assistant will make good decisions, more about whether the system lets dangerous ones through.</p>
+<h2>The worker AI: optimise for bounded execution</h2>
+<p>When a model runs inside a pipeline, the primary engineering concern is not that it produces a low-quality paragraph.</p>
+<p>The primary concern is that it behaves like an unbounded subsystem: it retries without stopping, times out without signalling, returns empty answers that look like legitimate "not found" results, and burns budget without producing evidence.</p>
 <p>The defining difference is unattended execution. The worker AI runs when nobody is watching.</p>
 <p>That changes the non-negotiables:</p>
 <ul>
 <li>Every call must have a time budget.</li>
-<li>Every run must have a correlation ID.</li>
+<li>Runs need a correlation ID.</li>
 <li>Every failure must degrade predictably.</li>
-<li>Every output must be validated against a contract.</li>
+<li>Outputs need validation against a defined contract.</li>
 </ul>
-<p>This is not “LLM safety” as ethics. It’s LLM safety as systems engineering.</p>
-<p>If you have ever debugged a distributed job that “completed successfully” but produced nonsense, you already understand the point: the failure mode that kills you is the one that looks like success.</p>
-<p>In a pipeline, a confident wrong answer is worse than an explicit error.</p>
-<p>So the governance posture flips:</p>
+<p>This is not "LLM safety" as ethics. It’s LLM safety as systems engineering.</p>
+<p>I've debugged distributed jobs that "completed successfully" but produced nonsense. The most expensive failure mode is the one that looks like success.</p>
+<p>In a pipeline, a confident wrong answer is more damaging than an explicit error.</p>
+<p>So the control posture flips:</p>
 <ul>
 <li>Developer AI is allowed to be creative because it is constrained by review.</li>
 <li>Worker AI must be boring because it is constrained only by the system you build around it.</li>
 </ul>
-<h2>The non-obvious case: one model, two governance regimes</h2>
-<p>Using the same model for both roles makes the distinction impossible to ignore.</p>
-<p>If the same weights can be:</p>
-<ul>
-<li>an interactive coding partner in one context, and</li>
-<li>an unattended decision-maker in another,</li>
-</ul>
-<p>then “model choice” cannot be the core governance decision.</p>
-<p>The governance decision is: what role is the model playing right now, and what controls apply to that role?</p>
-<p>This is why I treat governance as a stack:</p>
+<h2>The non-obvious case: one system, two feedback loops</h2>
+<p>It’s tempting to treat "model choice" as the core decision.
+But in this setup the builder and the runner are intentionally different models: one lives in the IDE and is human-adjudicated, the other lives inside a pipeline and runs unattended.</p>
+<p>The decision is: what role is the model playing right now, and what controls apply to that role?</p>
+<p>This is why I treat these as three layers:</p>
 <ol>
-<li><strong>Model</strong> — the underlying capability</li>
-<li><strong>Harness</strong> — skills, rules, hooks, session constraints for developer AI</li>
-<li><strong>LLMOps</strong> — budgets, observability, degrade modes, validation for worker AI</li>
+<li>Model (the underlying capability)</li>
+<li>Harness (skills, rules, hooks, session constraints for developer AI)</li>
+<li>LLMOps (budgets, observability, degrade modes, validation for worker AI)</li>
 </ol>
-<p>The mistake is investing heavily in layer 2 and assuming you’ve solved layer 3 as a by-product.</p>
-<p>You haven’t.</p>
+<p>It’s common to invest heavily in layer 2 and assume layer 3 is solved as a by-product.</p>
+<p>It isn’t.</p>
 <p>They solve different problems.</p>
-<h2>The category error in the wild</h2>
-<p>Once you see it, you start noticing it everywhere:</p>
-<h3>1) Bringing production ceremony into development</h3>
+<h2>When AI builds AI: the control loop becomes the product</h2>
+<p>The developer assistants built the solution, then wired in execution controls via a shared ops layer: run IDs, bounded budgets/timeouts, correlated telemetry, and caching controls. That matters because the next step wasn’t "ship the code". The next step was to <em>run the system</em> against a local model (for example qwen2.5:7b or qwen3.5:9b via Ollama) and see what happened.</p>
+<p>This showed up across multiple modules: once they all share the same ops layer, the assistant can iterate in a disciplined way instead of debugging each module as a one-off.</p>
+<p>Once the controls were in place, the loop looked like this:</p>
+<ul>
+<li>Run the pipeline and capture a run ID.</li>
+<li>Review telemetry correlated to that run (timeouts, retries, evidence gates, cache hits).</li>
+<li>Adjust the code, or adjust the runtime model parameters (e.g. temperature, top‑p, top‑k, whether the model’s "thinking mode" is enabled).</li>
+<li>Tune caching and summarisation so the system spends tokens where it matters.</li>
+<li>Re-run.</li>
+</ul>
+<p>A human could do this loop once or twice. But across multiple modules, with each rerun producing a new set of telemetry, the volume of structured evidence quickly exceeds what a human can usefully process. I would have become the bottleneck, not the asset — slowing the loop down and adding little value at the point where the AI is fastest. My judgment mattered at two points: defining what "good" looks like before the first run, and deciding whether the final result was acceptable. Everything in between was faster and more consistent with the assistant in the loop.</p>
+<p>Those parameter adjustments are literal config edits, not prompt rewrites, not code changes. Here is a representative slice of what the cloud assistant can change between runs without touching the underlying data:</p>
+<pre><code class="language-yaml">llm:
+  model: qwen3.5:9b
+  temperature: 0.1        # low: reduces variance; outputs stay reproducible across runs
+  max_tokens: 3000
+  timeout_seconds: 240
+  thinking: false         # off: burned the generation budget and returned empty responses
+
+max_retries: 1
+max_parse_retries: 2
+backoff_mode: exponential
+max_backoff_seconds: 30.0
+</code></pre>
+<p>Temperature, token limits, timeout, thinking mode, retry caps, backoff strategy. All in config. The cloud assistant reviews a run summary, identifies the failure class, and edits the values. No data crosses the boundary.</p>
+<p>What made the loop workable was mundane.</p>
+<p>First, everything is keyed off the run ID. That turns "the model behaved oddly" into "this specific run behaved oddly", which means the assistant can reason from concrete evidence rather than vibes.</p>
+<p>Second, the system summarises run results before it deep-dives. The assistant can start with a compact run summary (token economy) and only pull low-level telemetry when the summary suggests a real problem. That is a control choice too: summarisation is not a convenience feature, it controls what the assistant looks at and what it spends.</p>
+<p>This only works because the system writes down what happened.
+Not as vibes or a narrative, but as deterministic artefacts.
+Every run writes a manifest keyed by <code>run_id</code> (status, error counts, model identifier, fingerprints for config/inputs, and file hashes for primary artefacts). A separate run review then aggregates those artefacts and points you to the relevant telemetry and outputs.</p>
+<p>Here is the shape of the summary that makes the loop practical (redacted, but real enough to be testable):</p>
+<pre><code class="language-text">run_id: … (uuid)
+model: … (local)
+params: thinking=…, temperature=…, top_p=…, top_k=…
+
+status: ok | degraded
+quality_gates: passed=… failed=…
+fallback_loops: triggered=… max_iterations_hit=…
+
+llm_calls: …
+timeouts: …
+parse_repairs: …
+
+caches: hit_rate=… writes=…
+token_estimates: prompt≈… output≈…
+</code></pre>
+<p>Even when you don’t keep "pretty" before/after examples around, the system still produces hard evidence during test runs. A run review is a small JSON summary that points at the exact artefacts the assistant can inspect.</p>
+<p>Example run review excerpt (redacted):</p>
+<pre><code class="language-json">{
+  &quot;run_id&quot;: &quot;…&quot;,
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;verdict&quot;: &quot;ok_with_warnings&quot;,
+  &quot;warnings&quot;: [&quot;error_counts.context_overflow=1&quot;],
+  &quot;artifacts&quot;: {
+    &quot;run_manifest&quot;: &quot;…/run_manifest.json&quot;,
+    &quot;telemetry_jsonl&quot;: &quot;…/events.jsonl&quot;,
+    &quot;run_log&quot;: &quot;…/run.log&quot;
+  }
+}
+</code></pre>
+<p>And the corresponding manifest excerpt that makes the warning actionable:</p>
+<pre><code class="language-json">{
+  &quot;run_id&quot;: &quot;…&quot;,
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;error_counts&quot;: { &quot;context_overflow&quot;: 1 },
+  &quot;degrade_mode&quot;: &quot;refusal_with_suggestions&quot;,
+  &quot;config_fingerprint&quot;: &quot;…&quot;,
+  &quot;inputs_fingerprint&quot;: &quot;…&quot;
+}
+</code></pre>
+<p>That’s enough for the assistant to diagnose the class of failure ("prompt too large"), then decide whether the next change belongs in code (tighter chunking/limits), in configuration (smaller context budgets), or in prompting (more aggressive summarisation), without a human stepping through raw logs.</p>
+<p>A few concrete examples are what made this credible in my own work.</p>
+<p>First, in the visualisation pipeline, enabling the model’s "thinking mode" looked like it should improve reasoning. In practice, on Qwen3.5:9b it could burn the generation budget and return an empty response, which then cascaded into missing or malformed chart output. The fix was not moralising about prompts. The fix was a control: default thinking to off for publication runs, keep temperature low, and treat parse repair as a bounded retry rather than an open-ended loop.</p>
+<p>Second, we hardened visual outputs by treating prose as untrusted at the boundary. The charts and metrics stay deterministic. If the model writes narrative over them, it is only allowed to use numbers that appear in the telemetry-derived facts payload; any unsupported number triggers deterministic fallback phrasing. That is the difference between "the model usually behaves" and "the system cannot publish a wrong number".</p>
+<p>Third, in the classifier, we stopped treating the LLM as the first step.
+We added a five-layer reuse waterfall (cheap similarity layers before expensive inference) so cost scales with novelty, not dataset size.
+Most queries never touch the model at all.
+The cheap layers operate in milliseconds; an LLM call is orders of magnitude slower.
+Under heavy local load, we also needed a circuit-breaker style fallback so embedding calls don’t repeatedly stall the entire run when resources are saturated.</p>
+<p>Fourth, in retrieval, the system does not accept "non-empty" as success. A fast path produces a draft record, then a deterministic quality gate decides whether it is safe to accept. Only failures escalate into a bounded recovery loop, and that loop has hard caps so it cannot grow into an unbounded subsystem.</p>
+<p>Across all four, the boundary between roles is operational, not philosophical. The human defines intent and hard targets up front (taxonomy, validation contracts, known-good reference datasets and renderers). After that, the system can self-check: the classifier’s outputs can be re-rendered and compared, and the visualisation pipeline can be judged against deterministic expectations without needing a human to "eyeball" every run.</p>
+<p>This is the net effect: cloud coding assistants iterate on a system that executes locally on different LLMs, using bounded runs and correlated telemetry to converge. The result is an evidence-driven AI↔AI loop: build → run → review → tune → re-run.</p>
+<h2>The mix-up in the wild</h2>
+<h3>1) Applying production approval processes to the developer loop</h3>
 <p>Teams require detailed telemetry, change tickets, or heavyweight approval processes for every assistant-generated diff.</p>
 <p>The result is predictable:</p>
 <ul>
 <li>the assistant becomes too slow to use</li>
 <li>engineers bypass the process</li>
-<li>the “governance” becomes theatre</li>
+<li>the "controls" become theatre</li>
 </ul>
-<p>The right control surface for developer AI is not bureaucracy.
-It’s fast deterministic gates: formatters, linters, tests, and “no-go” hooks for dangerous actions.</p>
+<p>The right controls for developer AI are not bureaucratic ones.
+It’s fast deterministic gates: formatters, linters, tests, and "no-go" hooks for dangerous actions.</p>
 <h3>2) Bringing assistant permissiveness into production</h3>
-<p>Teams allow a pipeline LLM to “just try again” or “produce something useful” when evidence is missing.</p>
+<p>Teams allow a pipeline LLM to "just try again" or "produce something useful" when evidence is missing.</p>
 <p>That feels helpful in an interactive assistant.
-In production it’s a liability.</p>
+In production it’s a risk.</p>
 <p>If the system cannot find evidence, it must say so explicitly and degrade cleanly. Otherwise you are training your downstream consumers to trust outputs that were generated in the absence of supporting facts.</p>
-<h2>A practical way to operationalise the distinction</h2>
-<p>If you want a simple, actionable test:</p>
-<p>Ask one question.</p>
-<p><strong>When this output is wrong, who catches it first?</strong></p>
+<h3>3) Using the same quality standard in both roles</h3>
+<p>In development, quality is evaluated by the human in the loop: you read the output, decide if it's good enough, and move on. That works because the feedback loop is immediate and you are present for every output.</p>
+<p>In production, the system runs without a reviewer. Avoid treating "it looked right when I tested it" as a quality standard; quality has to be measured by the system, on every run.</p>
+<p>The failure mode is delayed discovery. You find out the output was wrong when something fails three steps later, or three days later.</p>
+<p>The production quality model is different by necessity. You cannot eyeball it. Quality must be measured by the system, against a defined standard, on every run. If the worker AI cannot produce evidence that meets a gate, it must degrade explicitly rather than continue. A plausible-looking wrong answer that bypassed no quality check is the most expensive failure mode in production AI. It is confident. It is invisible. It has a long runway before it surfaces.</p>
+<h2>A simple way to tell the difference</h2>
+<p>Ask: when this output is wrong, who finds out first?</p>
+<p>If it’s you, in the same session, you can fix it immediately. Speed matters more than perfection. That’s the developer loop.</p>
+<p>If it’s a downstream user, a customer, or a dashboard three days later, that’s the expensive kind of wrong. By then the output has already acted, been trusted, or propagated. That’s the production loop, and it’s the one you have to design against.</p>
+<h2>Key takeaways</h2>
 <ul>
-<li>If the answer is “a human reviewer in the same session”, you are in developer-AI territory. Optimise for throughput and controllability.</li>
-<li>If the answer is “a downstream user, a customer, or a dashboard three days later”, you are in worker-AI territory. Optimise for bounded execution, observability, and explicit failure.</li>
+<li>Cloud coding assistants (Claude Code / Trae / Qwen Code) can iterate on a local-only system by reviewing run artefacts: run IDs, summaries, manifests, and telemetry.</li>
+<li>"AI builds AI" is an outer loop: the coding assistants change code around an inner LLM whose behaviour is visible only through execution evidence.</li>
+<li>The practical pattern is summaries first (token economy), deep telemetry only when the summary flags a problem.</li>
+<li>Controls still matter, but they are in service of iteration: bounded runs, explicit degrade modes, and validation at the output boundary.</li>
 </ul>
-<p>That question forces you to name the control loop. Once you name it, the governance follows.</p>
 <h2>Close</h2>
-<p>The interesting question is no longer “are you using AI?”</p>
-<p>The question that matters is:</p>
-<p><strong>which role is the AI playing, and what governance regime applies to that role?</strong></p>
-<p>Treating governance as role-based is how you avoid both extremes: development slowed by ceremony, and production destabilised by assistant-style looseness.</p>
+<p>This project's articles fall into two chapters: one on how the developer loop is constrained (harness, memory, plan mode), and one on how the worker loop is constrained (ingest, retrieval, classification). They are different control regimes applied to the same system. This is the article that connects them.</p>
+<p>I’ve stopped asking "are you using AI?"</p>
+<p>The useful question is which role the model is playing right now, and what controls apply to that role.</p>
+<p>Treating controls as role-based is how you avoid both extremes: development slowed by approval overhead, and production destabilised by assistant-style looseness.</p>
+<p>This framing may evolve as the tooling matures, but the basic split has held up well in my own work.</p>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
 
 </body>
 </html>

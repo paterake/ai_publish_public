@@ -1,24 +1,19 @@
-Plan Mode is not governance
+I followed every tutorial's advice: plan first, then build.
 
-“Plan first” is good advice.
+Plan mode. Review the approach. Then implement.
 
-Treating a session permission mode as your primary safety mechanism is not.
+It worked until I hit a rate limit. Or ran out of context. Or needed to switch from Claude Code to Trae mid-refactor.
 
-If you’re using AI assistants on a long-lived codebase, this distinction matters.
+At that point I'd copy the plan mode output into a new session, rebuild context, and start over.
 
-Plan Mode is session-scoped.
-Governance is repo-scoped.
+I did this enough times to realise the advice was solving the wrong problem.
 
-I learned this when the assistant did exactly what I asked… and still reintroduced a constraint we’d already decided against weeks earlier.
+Plan mode keeps the plan alive for one session. The moment that session ends — rate limit, context ceiling, tool swap — the plan goes with it.
 
-The problem wasn’t “it started coding too early”.
-The problem was that the decision didn’t survive the session.
+What survived was what I put in the repo. Backlog files the agent could read cold. Checkpoints written before closing. Constraints forwarded explicitly.
 
-Plan Mode can slow a single session down.
-Governance is what makes the work correct across sessions and across assistants.
+I've run multi-day refactors across Claude Code, Trae, and Qwen Code this way. The plan was always there. It just wasn't in the chat.
 
-📌 The lesson: a permission switch is not a control surface. Durable contracts and executable gates are.
+Plan first is still right. Where the plan lives is the design choice most tutorials skip.
 
-Question: if you switched assistants tomorrow, would your constraints still apply — or would you be re-teaching them in chat?
-
-#AI #AIEngineering #VibeCoding #ClaudeCode #Trae
+#AI #AIEngineering #ClaudeCode #VibeCoding #Trae
