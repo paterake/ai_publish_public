@@ -4,7 +4,7 @@
 
 <h1>One AI Agent Governance Layer. Every Repo.</h1>
 <p>Image created by the author using Midjourney</p>
-<p><em>Why one governance layer, synced as a dependency into every repo, is the only approach that doesn't drift.</em></p>
+<p><em>Why one governance layer, synced as a dependency into every repo, is the one approach that prevents AI Coding Agents from drift.</em></p>
 <p>I have been coding since before I had a computer of my own. Back then, walking past a Dixons or Tandy was reason enough to go in. I'd find the demo units and start coding, nothing ambitious, just enough to leave a humorous message on screen or tie the keyboard up in a way the next customer wouldn't expect.</p>
 <p>I have since coded in Basic, Assembly, CICS COBOL, Pascal, Java, Scala, Python, and SQL across nearly four decades. The languages changed. The itch never did.</p>
 <p>Coding was always the tool I used to translate a complex problem into something real and working. I'd take a business requirement apart and watch it resolve into something that runs. That satisfaction hasn't gone anywhere. Watching a framework outgrow its original problem and start solving ones I hadn't designed it for is better still.</p>
@@ -16,18 +16,11 @@
 <p>My role didn't disappear. It shifted. I used to be the person who wrote the code. Now I'm the person who sets the standard, and the agent produces to it. The craft is still there. It just happens earlier in the process.</p>
 <p>Building controls I could actually trust is what most of the work turned out to be.</p>
 <p>Without them, you trust agent output by reading it. With them, you trust it through evidence. That scales. Personal code review doesn't.</p>
-<h2>Key takeaways</h2>
-<ul>
-<li>One governance layer, synced into every repo as a dependency rather than a copy, is the only structure that doesn't drift as tools and projects multiply.</li>
-<li>Policy text informs behaviour. Hooks enforce it. The difference is whether a rule can be ignored without anything failing.</li>
-<li>Downstream repos consume governance as a dependency. They do not fork it.</li>
-</ul>
 <h2>The gap between fast and good</h2>
 <p>The early wins were obvious. What I didn't notice was what I was deferring.</p>
 <p>As I shipped solutions, I kept having the same conversation with the agent. Every new session, every tool switch, I was re-establishing the same baseline. The same things, every time: keep solutions modular, drive everything through configuration rather than hardcoding assumptions into the code, build on existing libraries rather than from scratch, and make sure everything leaves a proper audit trail.</p>
 <p>These aren't preferences. They are the defaults of someone who has watched what happens to systems that don't start from these principles. Systems that look clever in year one become expensive in year three.</p>
 <p>I moved the requirements into the PRDs. That worked until the PRDs got heavy, intent and controls tangled together, neither readable on its own. I moved the controls out into project-level configuration. That worked until I had multiple projects, copied the controls across each, enhanced them separately, and watched them drift. One project had tighter security posture. Another had better operational bounds. Neither had the best of both.</p>
-<h2>Centralise or repeat</h2>
 <p>I stopped. I was solving the same governance problem in every project, slightly differently, slowly building up a multi-headed control layer with no single authoritative source.</p>
 <p>As a data engineer, you are trained to recognise this pattern and centralise the canonical version. Every consumer inherits from it. Projects add only what is genuinely unique to them, without touching the platform-level controls.</p>
 <p>That is what I built. A governance layer that loads before any assistant starts work, holds across sessions, and ships into every governed repo as a dependency rather than a copy. I came to call it the PCO (Policy, Control plane, Observability).</p>
@@ -42,29 +35,16 @@
 <p>In my setup, three assistants (Claude Code, Trae, and Qwen Code) all enter each repo the same way. Governance arrives in two layers.</p>
 <p>The first is automatic. In these three assistants, rule files covering security posture, operational bounds, agent behaviour, and context economy are injected by the harness before the session processes any message. The assistant didn't choose to read them. They were pushed.</p>
 <p>The second is instruction-following. The entry point (one line) directs the assistant to a routing file. That file defines a mandatory read order: platform rules first, project-specific context second — blocking pillars, task routing, and the project's active backlog.</p>
-<pre><code>CLAUDE.md / TRAE.md / QWEN.md   &lt;- entry point: one line
-    |
-    v
-ai_context/
-  pco/                          [platform-synced — read-only for consumers]
-  | governance/                 &lt;- contract, registries, exceptions
-  | ai_harness/
-  |   rules/                    &lt;- pushed into context at session start [auto-loaded]
-  |   hooks/
-  |   skills/
-  | ASSISTANTS.md               &lt;- read first: platform pillars + task router
-  |
-  project/                      [repo-owned — additive only]
-    ASSISTANTS.md               &lt;- read second: repo context + active backlog
-</code></pre>
+<p>The entry point routes into <code>ai_context/</code>, which splits into two layers: <code>pco/</code>, the synced read-only platform layer, and <code>project/</code>, the repo-owned additive layer. Each has its own <code>ASSISTANTS.md</code> — the platform one loaded first, the repo one second.</p>
 <p>Inside the platform layer, each directory has a distinct job:</p>
 <ul>
-<li><code>governance/</code>: the shareable contract, registries (capabilities, exceptions), and ten domain folders — one per spoke — defining controls and evidence expectations without hardcoding repo-specific detail</li>
+<li><code>governance/</code>: the shareable contract, registries, and ten domain folders — one per spoke — defining controls and evidence expectations</li>
 <li><code>ai_harness/</code>: enforcement surfaces that make the contract real in practice</li>
 <li><code>rules/</code>: policy packs (blocking and advisory) expressed in an enforceable format</li>
 <li><code>hooks/</code>: interceptors that stop unsafe actions before they execute</li>
-<li><code>skills/</code>: versioned procedures for repeatable task classes: data analysis, context sync, code review, documentation generation. Rules constrain what the assistant may do; skills define how a repeatable task must be executed.</li>
+<li><code>skills/</code>: versioned procedures for repeatable task classes — data analysis, context sync, code review, documentation generation</li>
 </ul>
+<p>Rules constrain what the assistant may do; skills define how a repeatable task must be executed.</p>
 <p>This is what separates a governed repo from an ungoverned one: the controls don't wait to be explained. They arrive before the assistant has a choice.</p>
 <p>Getting to that point meant treating governance as a data engineering problem, not a prompting one.</p>
 <h2>The cost of consistency</h2>
@@ -72,15 +52,14 @@ ai_context/
 <p>The governance layer has a measurable, bounded cost. The full layer, 11 rule files plus routing and entry-point files, totals roughly 40KB of text — approximately 10,000 tokens, or about 5% of a modern 200K context window. It loads once and holds across every turn in the session. The design target is 5–10% of context, enough to anchor behaviour, small enough not to crowd out the actual work.</p>
 <p>Without governance, a session re-derives constraints from conversation history as it grows. Earlier rules lose weight as task signals accumulate, the cost is invisible, paid on every turn, and compounds with session length. That 5% is the price of consistency. The alternative is drift that looks like progress until it isn't.</p>
 <p>Context saturation compounds when work spans multiple sessions. The PCO contract covers this: long-running work is designed in sessions rather than accumulated in one — each session starts from an anchor document that records current state, next step, accumulated constraints, and known gotchas. The session starts warm from recorded state, not by re-reading old transcripts. Work hands off cleanly between sessions, or between agents, without losing what was established.</p>
+<p>Token costs grow with ungoverned sessions. Without a governed context layer, each session re-establishes the same constraints from scratch. Utility code gets re-implemented because its existence only lived in a previous chat transcript.</p>
+<p>Agent loops have no natural stopping point. An agent executing a multi-step plan without execution limits, verification gates, or evidence checkpoints can drift far from intent before any failure surface triggers. The failure mode is not an error. It is a confident wrong answer that passed all the local checks and got committed.</p>
 <h2>What I learned building it</h2>
 <p>What cost me most looked like "everything is fine":</p>
 <p>Governance exceptions are easy to justify once and easy to forget. The first one was warranted — unblock a specific delivery while the platform was still evolving. By the next review, nobody was treating it as an exception any more — it had become the default. Exceptions need a fixed end date; when they lapse, the original constraint must reassert, not quietly persist.</p>
 <p>An agent will tell you the task is verified. The only evidence is a sentence in a chat transcript from a session that's gone. The fix is a check you can re-run independently — not "do I believe the agent?" but "can I run this myself and see the same outcome?"</p>
 <p>Drift doesn't show up until you have multiple repos. A local patch to a governance control feels harmless in one place. Across several projects, each patched slightly differently, the controls have quietly diverged — and the inconsistency only surfaces when the projects need to work together.</p>
 <p>Evidence is not durable by default. During a restructure I lost the records of what previous agent runs had produced — sitting in an ignored folder, gone after a tidy-up. Nothing broke in the code. What broke was my ability to prove what had worked before. Those records are a first-class output, not a convenience file.</p>
-<h2>Why AI agent delivery needs this</h2>
-<p>Token costs grow with ungoverned sessions. Without a governed context layer, each session re-establishes the same constraints from scratch. Utility code gets re-implemented because its existence only lived in a previous chat transcript.</p>
-<p>Agent loops have no natural stopping point. An agent executing a multi-step plan without execution limits, verification gates, or evidence checkpoints can drift far from intent before any failure surface triggers. The failure mode is not an error. It is a confident wrong answer that passed all the local checks and got committed.</p>
 <h2>What PCO is</h2>
 <ul>
 <li><strong>Policy</strong> — <em>The responsibility:</em> Decide what's allowed, under what constraints — <em>What makes it real:</em> Blocking constraints and explicit decision rights</li>
@@ -88,17 +67,23 @@ ai_context/
 <li><strong>Observability</strong> — <em>The responsibility:</em> Prove what happened and detect drift — <em>What makes it real:</em> Run evidence, lineage, audits, exception/approval records</li>
 </ul>
 <p>If you only have policy text, you don't have governance. You have preferences.</p>
-<p>Three baseline requirements apply to every run regardless of risk tier: signal uncertainty rather than producing a confident wrong answer; never represent the assistant as human in any channel; state assumptions explicitly before acting, and when multiple interpretations exist, present them rather than picking one silently. Filling gaps without flagging them is how agents deliver exactly what was asked for in a way that wasn't intended. A platform that allows any of these to be overridden through conversation is non-conformant.</p>
+<p>Three requirements apply to every run regardless of risk tier:</p>
+<ul>
+<li>Signal uncertainty rather than producing a confident wrong answer</li>
+<li>Never represent the assistant as human in any channel</li>
+<li>State assumptions before acting; when multiple interpretations exist, present them rather than picking one silently</li>
+</ul>
+<p>Filling gaps without flagging them is how agents deliver exactly what was asked for in a way that wasn't intended. A platform that allows any of these to be overridden through conversation is non-conformant.</p>
 <h2>The governance model: hub-and-spoke</h2>
 <p>The platform is structured as a hub-and-spoke, borrowed directly from how data engineering governs shared master data across many pipelines and consumers. One authoritative source, consumed as a dependency.</p>
 <p>The hub owns the canonical standards: decision rights, how policies are classified and enforced, risk tiers, approvals, and evidence requirements. Downstream repos consume it. They do not fork it.</p>
 <p>I kept coming back to this structure because I had seen the alternative: local fixes that worked until the next sync overwrote them silently, platform improvements that never propagated.</p>
 <p>The spokes are the governed domains. Each spoke defines controls and evidence expectations for one area of the platform without constraining internal implementation. Four spokes are where the pain shows up first:</p>
 <ul>
-<li><strong>Behaviour &amp; Design</strong> — <em>What it governs:</em> Behaviour as a fixed contract: what role the assistant plays, which tools it can call, and how it handles uncertainty. Core policy is loaded and locked at session start; it cannot be overridden through conversation, regardless of how the session develops</li>
-<li><strong>Runtime &amp; Operations</strong> — <em>What it governs:</em> How a run is managed from start to finish: limited retries, clear stopping conditions, the ability to cancel a specific workflow, and the requirement that every run can be reproduced from its recorded inputs — proven by a record, not a claim</li>
-<li><strong>Security &amp; Safety</strong> — <em>What it governs:</em> Controls that stop data leaking out, credentials scoped to the task that needs them, and the rule that sensitive data, untrusted content, and the ability to make external calls must never coexist in the same session</li>
-<li><strong>Assurance &amp; Evals</strong> — <em>What it governs:</em> Evaluation as a blocking gate at three levels — the quality of the final answer, the sequence of actions taken to produce it, and consistency across a multi-turn conversation — with test datasets, verified scoring, and a process that turns production failures into permanent test cases</li>
+<li><strong>Behaviour &amp; Design</strong> — <em>What it governs:</em> Behaviour as a fixed contract: role, permitted tools, and how uncertainty is handled. Loaded at session start; cannot be overridden through conversation</li>
+<li><strong>Runtime &amp; Operations</strong> — <em>What it governs:</em> How a run is managed: bounded retries, clear stopping conditions, cancellation support, and a requirement that every run is reproducible from its recorded inputs</li>
+<li><strong>Security &amp; Safety</strong> — <em>What it governs:</em> Controls that stop data leaking out: credentials scoped to the task, and a hard rule that sensitive data, untrusted content, and external write access must never coexist in the same session</li>
+<li><strong>Assurance &amp; Evals</strong> — <em>What it governs:</em> Evaluation as a blocking gate at three levels — final answer quality, sequence of actions taken, and multi-turn consistency — with versioned datasets and a loop that converts production failures into regression tests</li>
 </ul>
 <p>Six further spokes govern agent architecture patterns, tool registries, knowledge retrieval, identity and entitlements, telemetry and cost attribution, and versioning and lineage.</p>
 <p>Spokes can evolve independently; they remain accountable to the hub's non-negotiables. A project adds a repo-owned layer on top, additive context that must not contradict the platform.</p>
@@ -113,7 +98,7 @@ ai_context/
 <p>Rule files are guidance. They inform behaviour but lose weight as a session grows long. Hooks are enforcement. They execute at defined points regardless of session length, model output, or instruction drift. The model has no prose path around them. At most it can choose different actions that avoid the gated operation.</p>
 <p>In my implementation, one hook defers <code>git push</code> to <code>main</code> for human approval and returns a structured denial that includes risk tier, policy set, and the next action.</p>
 <p>When a rule is violated, the shape of that response is fixed — auditable rather than conversational:</p>
-<pre><code class="language-text">Action denied by governance policy.
+<pre><code>Action denied by governance policy.
 Reason: Protected change requires approval at this risk tier.
 Next: request approval or scope down the change.
 </code></pre>
@@ -124,15 +109,7 @@ Next: request approval or scope down the change.
 <p>Three things make the claim verifiable. The contract shows there is a stable "what must be true" layer, independent of tooling. The operating model shows governance exists as a lifecycle, not a policy PDF — it defines the evidence outcomes a run must produce. The routing rules show that assistants enter each repo through governance deterministically, not via "whatever was in the chat".</p>
 <p>The contract alone shows intent. The operating model shows it works consistently — the same evidence every run. The routing rules show it holds when you switch tools or start a fresh session.</p>
 <p>Here is the shape of an evidence package header, intentionally content-light:</p>
-<pre><code class="language-text">run_id: &lt;id&gt;
-policy_set: &lt;id&gt;
-workflow: &lt;type&gt;@&lt;version&gt;
-tool_identity: &lt;assistant&gt;@&lt;version&gt;
-model_identity: &lt;model&gt;@&lt;version&gt;
-verification: &lt;checks_run&gt; -&gt; &lt;pass|fail&gt;
-approvals: &lt;ids_or_empty&gt;
-exceptions: &lt;ids_or_empty&gt;
-</code></pre>
+<p>https://gist.github.com/paterake/0f745fdc91fdc0c814e8e7ade21e71cc</p>
 <p>Each field ties a specific output to a specific policy version, a verified tool identity, and a named set of completed checks. The system audits against this record — flagging exceptions, expired permissions, and gaps. Human review is triggered by what gets flagged, not by reading every run.</p>
 <p>You get credibility from auditability, not from revealing prompts.</p>
 <h2>How it ships without drift</h2>
@@ -141,6 +118,12 @@ exceptions: &lt;ids_or_empty&gt;
 <p>When a repo discovers a platform gap, it doesn't fix it locally. It produces a structured gap report and pushes the fix upstream, so the next sync corrects every repo at once. Local hotfixes are how the platform silently forks.</p>
 <p>The platform can audit itself: detecting contradictions between declared policy and required artefacts, missing mandatory registries, and expired exceptions still treated as active.</p>
 <p>The overhead makes sense when you have multiple repos and more than one assistant. A single-repo, single-tool setup carries much of the overhead without much return. The investment pays back when you hit the first tool switch that requires no reset, or when a platform fix propagates to three repos at once instead of being applied to each separately.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>One governance layer, synced into every repo as a dependency rather than a copy, is the only structure that doesn't drift as tools and projects multiply.</li>
+<li>Policy text informs behaviour. Hooks enforce it. The difference is whether a rule can be ignored without anything failing.</li>
+<li>Downstream repos consume governance as a dependency. They do not fork it.</li>
+</ul>
 <h2>If you want to adopt the pattern</h2>
 <ul>
 <li>Define non-negotiable pillars that apply to every run</li>

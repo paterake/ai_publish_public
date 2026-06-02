@@ -32,7 +32,9 @@ Roll out AI coding to twenty engineers without shared governance and each one de
 
 One governance layer, running before the first prompt lands.
 
-In Claude Code, the rules file tells the model what to do. It doesn't stop anything. The PCO's job is to make rules stop things. If the agent can ignore a rule without anything failing, you don't have governance.
+In Claude Code, the rules file tells the model what to do. It doesn't stop anything. The PCO's job is to make rules stop things.
+
+The contract is what you can share: what gets enforced and what evidence each run produces. The implementation stays private. Evidence is what makes it credible to publish.
 
 When inconsistency shows up in AI-assisted delivery across your team, what's the first thing you look at — the tool or the absence of a shared baseline?
 
