@@ -2,7 +2,7 @@
 <html>
 <body>
 
-<h1>How Shared Governance Stopped My AI Agents Forgetting Their Own Rules</h1>
+<h1>How Shared Governance Stops AI Agents Forgetting</h1>
 <p>Image created by the author using Midjourney</p>
 <p><em>Why one governance layer, synced as a dependency into every repo, is the one approach that prevents AI Coding Agents from drift.</em></p>
 <p>I have been coding since before I had a computer of my own. Back then, walking past a Dixons or Tandy was reason enough to go in. I'd find the demo units and start coding, nothing ambitious, just enough to leave a humorous message on screen or tie the keyboard up in a way the next customer wouldn't expect.</p>
@@ -56,8 +56,8 @@
 <p>Agent loops have no natural stopping point. An agent executing a multi-step plan without execution limits, verification gates, or evidence checkpoints can drift far from intent before any failure surface triggers. The failure mode is not an error. It is a confident wrong answer that passed all the local checks and got committed.</p>
 <h2>What I learned building it</h2>
 <p>What cost me most looked like "everything is fine":</p>
-<p>Governance exceptions are easy to justify once and easy to forget. The first one was warranted — unblock a specific delivery while the platform was still evolving. By the next review, nobody was treating it as an exception any more — it had become the default. Exceptions need a fixed end date; when they lapse, the original constraint must reassert, not quietly persist.</p>
-<p>An agent will tell you the task is verified. The only evidence is a sentence in a chat transcript from a session that's gone. The fix is a check you can re-run independently — not "do I believe the agent?" but "can I run this myself and see the same outcome?"</p>
+<p>Governance exceptions are easy to justify once and easy to forget. The first one was warranted, unblock a specific delivery while the platform was still evolving. By the next review, nobody was treating it as an exception any more — it had become the default. Exceptions need a fixed end date; when they lapse, the original constraint must reassert, not quietly persist.</p>
+<p>An agent will tell you the task is verified. The only evidence is a sentence in a chat transcript from a session that's gone. The fix is a check you can re-run independently, not "do I believe the agent?" but "can I run this myself and see the same outcome?"</p>
 <p>Drift doesn't show up until you have multiple repos. A local patch to a governance control feels harmless in one place. Across several projects, each patched slightly differently, the controls have quietly diverged — and the inconsistency only surfaces when the projects need to work together.</p>
 <p>Evidence is not durable by default. During a restructure I lost the records of what previous agent runs had produced — sitting in an ignored folder, gone after a tidy-up. Nothing broke in the code. What broke was my ability to prove what had worked before. Those records are a first-class output, not a convenience file.</p>
 <h2>What PCO is</h2>
@@ -80,10 +80,10 @@
 <p>I kept coming back to this structure because I had seen the alternative: local fixes that worked until the next sync overwrote them silently, platform improvements that never propagated.</p>
 <p>The spokes are the governed domains. Each spoke defines controls and evidence expectations for one area of the platform without constraining internal implementation. Four spokes are where the pain shows up first:</p>
 <ul>
-<li><strong>Behaviour &amp; Design</strong> — <em>What it governs:</em> Behaviour as a fixed contract: role, permitted tools, and how uncertainty is handled. Loaded at session start; cannot be overridden through conversation</li>
-<li><strong>Runtime &amp; Operations</strong> — <em>What it governs:</em> How a run is managed: bounded retries, clear stopping conditions, cancellation support, and a requirement that every run is reproducible from its recorded inputs</li>
-<li><strong>Security &amp; Safety</strong> — <em>What it governs:</em> Controls that stop data leaking out: credentials scoped to the task, and a hard rule that sensitive data, untrusted content, and external write access must never coexist in the same session</li>
-<li><strong>Assurance &amp; Evals</strong> — <em>What it governs:</em> Evaluation as a blocking gate at three levels — final answer quality, sequence of actions taken, and multi-turn consistency — with versioned datasets and a loop that converts production failures into regression tests</li>
+<li><strong>Behaviour &amp; Design</strong> — Behaviour as a fixed contract: role, permitted tools, and how uncertainty is handled. Loaded at session start; cannot be overridden through conversation</li>
+<li><strong>Runtime &amp; Operations</strong> — How a run is managed: bounded retries, clear stopping conditions, cancellation support, and a requirement that every run is reproducible from its recorded inputs</li>
+<li><strong>Security &amp; Safety</strong> — Controls that stop data leaking out: credentials scoped to the task, and a hard rule that sensitive data, untrusted content, and external write access must never coexist in the same session</li>
+<li><strong>Assurance &amp; Evals</strong> — Evaluation as a blocking gate at three levels — final answer quality, sequence of actions taken, and multi-turn consistency — with versioned datasets and a loop that converts production failures into regression tests</li>
 </ul>
 <p>Six further spokes govern agent architecture patterns, tool registries, knowledge retrieval, identity and entitlements, telemetry and cost attribution, and versioning and lineage.</p>
 <p>Spokes can evolve independently; they remain accountable to the hub's non-negotiables. A project adds a repo-owned layer on top, additive context that must not contradict the platform.</p>
@@ -97,7 +97,7 @@
 </ul>
 <p>Rule files are guidance. They inform behaviour but lose weight as a session grows long. Hooks are enforcement. They execute at defined points regardless of session length, model output, or instruction drift. The model has no prose path around them. At most it can choose different actions that avoid the gated operation.</p>
 <p>In my implementation, one hook defers <code>git push</code> to <code>main</code> for human approval and returns a structured denial that includes risk tier, policy set, and the next action.</p>
-<p>When a rule is violated, the shape of that response is fixed — auditable rather than conversational:</p>
+<p>When a rule is violated, the shape of that response is fixed, auditable rather than conversational:</p>
 <pre><code>Action denied by governance policy.
 Reason: Protected change requires approval at this risk tier.
 Next: request approval or scope down the change.
@@ -105,11 +105,12 @@ Next: request approval or scope down the change.
 <p>A reviewer can always explain why an action was blocked. That is the difference between a denial that proves governance and a denial that just stops work.</p>
 <p>If nothing ever fails, the "policy" is only persuasion. Persuasion does not survive long sessions.</p>
 <h2>The proof without link spam</h2>
-<p>This article is the proof — it shows what the system looks like from the outside, without requiring access to the implementation behind it.</p>
-<p>Three things make the claim verifiable. The contract shows there is a stable "what must be true" layer, independent of tooling. The operating model shows governance exists as a lifecycle, not a policy PDF — it defines the evidence outcomes a run must produce. The routing rules show that assistants enter each repo through governance deterministically, not via "whatever was in the chat".</p>
-<p>The contract alone shows intent. The operating model shows it works consistently — the same evidence every run. The routing rules show it holds when you switch tools or start a fresh session.</p>
+<p>This article is the proof, it shows what the system looks like from the outside, without requiring access to the implementation behind it.</p>
+<p>Three things make the claim verifiable. The contract shows there is a stable "what must be true" layer, independent of tooling. The operating model shows governance exists as a lifecycle, not a policy PDF, it defines the evidence outcomes a run must produce. The routing rules show that assistants enter each repo through governance deterministically, not via "whatever was in the chat".</p>
+<p>The contract alone shows intent. The operating model shows it works consistently, the same evidence every run. The routing rules show it holds when you switch tools or start a fresh session.</p>
 <p>Here is the shape of an evidence package header, intentionally content-light:</p>
 <p>https://gist.github.com/paterake/0f745fdc91fdc0c814e8e7ade21e71cc</p>
+<p><em>Evidence package header</em></p>
 <p>Each field ties a specific output to a specific policy version, a verified tool identity, and a named set of completed checks. The system audits against this record — flagging exceptions, expired permissions, and gaps. Human review is triggered by what gets flagged, not by reading every run.</p>
 <p>You get credibility from auditability, not from revealing prompts.</p>
 <h2>How it ships without drift</h2>
