@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>14 LLMOps Primitives, Zero Cloud Dependencies</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>These primitives were not designed. Every failure that had no signal forced the agent to build one. Eventually, those signals caught failures in the primitives themselves, and the agent replaced them.</em></p>
+<p>A coding agent working at pace generates more code than one reviewer can check for correctness. A pipeline processing ten years of operational data in a single run makes thousands of model calls, more than any human can inspect for correctness. The data stays on-machine too, the coding agent cannot read source inputs or model outputs to diagnose failures. The signals are the review mechanism. Every primitive in this article was built to make one class of failure visible that previously had none: the reconciliation check caught ingestion fragmentation that raised no error; the retrieval quality checker caught retrieval regression visible only in degraded answers; the circuit breaker caught provider stalls before they consumed the run budget silently.</p>
+<p>Those signals eventually caught failures in the agent's own code. The custom retrieval quality checker was producing scores. The custom circuit breaker was catching failures. A custom telemetry layer was emitting structured events. All three had passed code review. When the OSS replacements arrived, the richer signals they emitted found two problems code review had missed: scores that were not comparable across runs, and circuit state transitions missing from telemetry. The agent replaced all three with OSS equivalents.</p>
+<p>Fourteen shared primitives later, the operational layer covers every phase of a run: run correlation, structured telemetry, a retrieval quality checker, a circuit breaker, budget guardrails, lineage manifests. OSS where it covers the problem (RAGAS, pybreaker, OpenTelemetry), custom code only where it doesn't. No cloud APIs are required; the data stays local. The coding agent reads the evidence bundle keyed by a single run ID, not the source inputs.</p>
+<h2>The 14 primitives</h2>
+<p>Together they bound what can go wrong when no one is watching: every run has a timeout, a budget, a degrade mode, and a unique run identifier. A shared package provides them as callable helpers.</p>
+<ol>
+<li><strong>Run correlation:</strong> assigns each pipeline execution a unique run identifier and propagates it across all modules so every telemetry event, manifest, and artefact can be correlated end-to-end.</li>
+<li><strong>Structured telemetry:</strong> emits JSON events (LLM call, tool call, eval result, feedback) to application logs and optionally to a JSONL file; content-safe by default, raw prompts never logged.</li>
+<li><strong>Embedding observability:</strong> wraps embedding calls to emit telemetry and track per-run counters (calls, batches, texts, failures) in a thread-safe in-memory store separate from the event stream.</li>
+<li><strong>Lineage manifests:</strong> writes structured, replayable records for every run and every corpus ingestion, keyed by the run identifier.</li>
+<li><strong>Cost estimation:</strong> token estimation and pricing model; every model call emits estimated prompt tokens, output tokens, and cost so spend is visible without a cloud billing dashboard.</li>
+<li><strong>Cost guardrails:</strong> optional per-run budgets enforced before each LLM call; budget breaches emit structured telemetry rather than raising unhandled exceptions.</li>
+<li><strong>LlamaIndex + OpenTelemetry tracing + metrics:</strong> LlamaIndex callback instrumentation with optional OTLP span export; content-safe by default; canonical OTel meters (call duration, token totals, cache hits, budget breaches, cost) exportable via OTLP.</li>
+<li><strong>Contract helpers:</strong> stable error and result envelopes at module boundaries so failures are structured rather than surfacing as raw exceptions.</li>
+<li><strong>Evaluation harness:</strong> two modes: expected-based (CI, repeatable, zero LLM calls) and RAGAS-scored (faithfulness, answer relevance, context precision); retrieval metrics (Hit@k, MRR, NDCG).</li>
+<li><strong>Feedback events (HITL):</strong> standard feedback format tied to the run identifier; full improvement loop from captured feedback events through privacy-safe dataset export to prompt or config adjustment and re-evaluated baseline.</li>
+<li><strong>Semantic cache + guardrails + artefact registry:</strong> two cache levels (LLM-call and retrieval/query) using embedding similarity; YAML guardrail rules for PII and injection tripwires; artefact snapshot, promotion, and rollback pointers.</li>
+<li><strong>Ops reporting + retention:</strong> per-run review (verdict, warnings, key metrics, pointers to telemetry and manifests), run comparison delta, verdict history index, and age/size-based retention cleanup.</li>
+<li><strong>Artefact promotion / rollback:</strong> CLI for promoting corpus, graph, and index snapshots to named pointers; rollback is a re-promotion.</li>
+<li><strong>Circuit breaker:</strong> wraps provider calls with an open/half-open/closed state machine; trips before a stalling local model burns the run budget; circuit state transitions appear in the telemetry stream alongside call latency and degrade modes.</li>
+</ol>
+<p>https://gist.github.com/paterake/8080142f077961af6fff6e524d915cb3</p>
+<p><em>A representative telemetry event: no raw prompt or output, only hashes, sizes, and operational metadata.</em></p>
+<h2>What the agent reads</h2>
+<p>These primitives emit two tiers of signal the agent reads to diagnose failures: <strong>LLMOps signals</strong> available immediately after a run, and <strong>RAGOps signals</strong> that require a retrieval quality assessment first.</p>
+<p>The <strong>LLMOps signals</strong> appear immediately. Readable as soon as a run completes:</p>
+<ul>
+<li><strong>Circuit breaker state</strong>: catches provider stalls before the run burns its budget on dead calls.</li>
+<li><strong>Output completion reasons</strong>: high truncation rates mean outputs are being cut short; high context overflow rates mean the context window is undersized for the workload.</li>
+<li><strong>Token budget consumption rate</strong>: if the model is spending its budget before producing output, the signal appears here before results start failing.</li>
+</ul>
+<p><strong>RAGOps signals</strong> require a retrieval quality assessment first and cover a different class of failure:</p>
+<ul>
+<li><strong>Retrieval metrics</strong> (Hit@k, RAGAS faithfulness, context precision): catch quality regression that produces no error: the model answers, but not from the right chunks.</li>
+<li><strong>Reconciliation checks</strong>: catch ingestion fragmentation: when sparse and dense index counts diverge, the ingest is structurally broken.</li>
+<li><strong>Cross-run comparison</strong>: makes regression visible; a change that fixed one signal while degrading another only shows up here.</li>
+</ul>
+<p>Both tiers are addressed from a single run identifier, without touching source data, model outputs, or prompts.</p>
+<h2>How a coding agent reviews a run</h2>
+<p>Each pipeline execution is assigned a unique run identifier. After any workload executes, everything that happened is searchable from that single identifier: telemetry events, run manifest (a structured record of what the run produced: status, config fingerprints, model identifier, error counts), ingestion manifest (the equivalent for the ingest pipeline: chunker settings, parser, document counts), run review verdict, and a comparison against the previous run. The agent does not need to re-run anything, inspect any data, or read any model output to diagnose what went wrong.</p>
+<p>The output directory for a completed run has a predictable structure:</p>
+<p>https://gist.github.com/paterake/4e7dd42ce971c5b3b3040a95f97c2005</p>
+<p><em>The evidence trail for a run: five files, one directory, addressed by <code>run_id</code>.</em></p>
+<p>Two redacted examples (values and paths normalised):</p>
+<p>https://gist.github.com/paterake/622bfb49f8e9f758c7b5afc5eeb9ff63</p>
+<p><em>run_review.json: run verdict, warnings, and telemetry artifact path.</em></p>
+<p>https://gist.github.com/paterake/b6c4ca042276bafd4cbd9f017e8b332f</p>
+<p><em>run_comparison.json: delta values against the previous run; throughput, node counts, and reconciliation anomalies.</em></p>
+<p>The verdict can be <code>pass</code>, <code>ok_with_warnings</code>, <code>fail</code>, or <code>degraded</code>; each points at a different intervention class. In practice, a run that completes with <code>ok_with_warnings</code> might name <code>context_overflow</code> as the flagged signal type. This directs the agent to open telemetry, scan for <code>context_overflow</code> events, and locate them within a single pipeline stage. That points to the context budget for that stage, not the model or the data. One config change, one re-run. <code>run_comparison.json</code> confirms the signal cleared without degrading anything else.</p>
+<p>The loop is: read the evidence trail, form a diagnosis from specific field values, apply one targeted intervention, re-run, verify.</p>
+<p>The signal determines the intervention type. A config parameter out of range is a quick fix; one change, one re-run. A structural problem in the implementation is not: the code changes, and if it touches how data was processed upstream, the corpus has to be rebuilt and re-ingested. A comparison against the previous run shows whether the targeted signal moved.</p>
+<h2>Each failure made visible</h2>
+<p>When local Ollama model calls started stalling under load, the circuit breaker tripped before the run burned its budget on failed calls. The run stopped cleanly. The cause was already in telemetry. There was a run record to read, not a crash to recover from.</p>
+<p>Retrieval quality was a harder problem because nothing broke. The run completed, the model answered, but the answers were coming from the wrong chunks. The retrieval quality checker made it visible: scores had dropped on this specific run, and run correlation showed exactly when it happened.</p>
+<p>The diagnosis led back to ingestion. The source was a multi-page definitions table from a corporate policy handbook: rows that only made sense as complete units. The chunker was splitting them mid-row, producing short incoherent fragments that ranked weakly in both indexes.</p>
+<p>That pointed at the PDF parser and the chunking strategy simultaneously. The agent tested three parsers against the same document: the first lost table structure entirely, the second fragmented it, the third retained it intact. The retrieval signals showed the pattern at each step. The metrics confirmed the selection.</p>
+<p>Each failure had been caught by a different primitive. Each primitive has a defined role. Run correlation makes before/after comparison possible. The retrieval quality checker finds quality problems that produce no error: when relevant chunks aren't returned, the only signal is degraded answers. Reconciliation catches fragmentation precisely because index count mismatches raise no exception; ingestion metrics identify the cause. The circuit breaker keeps a stalling local model from taking the whole run down.</p>
+<h2>The agent recognised it had rebuilt OSS</h2>
+<p>The signals that exposed pipeline failures eventually found problems with the custom implementations themselves. The governance contract said to prefer OSS over custom code; the agent had ignored that preference during the initial build.</p>
+<p>A rule without a named consequence gives an agent nothing to weigh. When the governance rules were rewritten to name the specific failure each prevents, and sessions were anchored to a document of what had been built, a fresh session read that record and evaluated the custom implementations against rules it could now actually see. The gaps were there: scores not comparable across runs, incomplete circuit breaker telemetry, non-portable spans. The rule, the evidence, and the gap were all visible at the same time. A subsequent session replaced all three with RAGAS, pybreaker, and OpenTelemetry.</p>
+<h3>RAGAS: evaluation</h3>
+<p>RAGAS scores against an industry benchmark. Faithfulness, AnswerRelevancy, and ContextPrecisionWithoutReference mean the same thing here as on any other system that uses them. The judge runs against a locally-hosted Ollama model at £0 in API calls.</p>
+<p>https://gist.github.com/paterake/9cb435847041d2c6279f358741f351dc</p>
+<p><em>RAGAS judge scoring: faithfulness, answer relevancy, and context precision evaluated against a locally-hosted Ollama model.</em></p>
+<h3>pybreaker: circuit breaker</h3>
+<p>When a local model stalls, pybreaker trips the circuit before the run burns its budget on dead calls. Open, half-open, and closed state transitions are structured telemetry events. The cause lands in the run record, not in logs.</p>
+<h3>OpenTelemetry: tracing and telemetry</h3>
+<p>Every LLM call and tool call emits spans using GenAI semantic conventions. Model identifier, token counts, and operational state carry standardised attribute names. Any OTLP-compatible backend can read them without custom parsing.</p>
+<h3>The full stack</h3>
+<p>The migration (RAGAS, pybreaker, OpenTelemetry) replaced custom implementations within the operational layer. The broader foundation underneath:</p>
+<ul>
+<li>Ollama: local model serving and embeddings, no cloud required</li>
+<li>LlamaIndex: retrieval framework; index construction, querying, and callbacks</li>
+<li>ChromaDB: vector store for dense retrieval</li>
+<li>llama-index-retrievers-bm25: sparse retrieval keyword index</li>
+<li>RAGAS: evaluation metrics; faithfulness, relevancy, and context precision</li>
+<li>pybreaker: circuit breaker; open/half-open/closed state management</li>
+<li>OpenTelemetry: tracing and metrics via OTLP spans and GenAI semantic conventions</li>
+<li>Redis <em>(optional)</em>: semantic cache backend</li>
+</ul>
+<h2>The OSS signals improved solutions that were already built</h2>
+<p>The RAGAS, pybreaker, and OpenTelemetry replacements improved signal coverage, not code quality. The agent had tuned the custom implementations to detect the specific failures it was diagnosing at the time. The OSS solutions caught problems the custom implementations were never built to see. Two modules I had called done were not.</p>
+<p>The classifier was the first of those two modules. Per-call counters showed the LLM was being called on nearly every query. Every LLM call has a cost; cheaper methods that could have answered the same query were going unused. The output looked correct; only the call volume showed the problem. The richer telemetry made a different design visible: put the LLM at the end of the chain, behind exact match, fuzzy match, and embedding similarity, called only when the cheaper layers cannot answer. Only genuinely new queries reach the model.</p>
+<p>The visualisation pipeline was the second. Budget tracking showed the model burning its generation budget before producing any chart output. The cause was chain-of-thought: with thinking mode enabled, the model was spending its token budget reasoning about what charts to draw, then timing out before drawing any. The fix was a single config change: disabling chain-of-thought for that run type, applied to the shared config rather than the module. The module never needed changing. The signal told the agent exactly where to look.</p>
+<p>Both of those fixes happened after the agent had reviewed the solutions and considered them complete. The operational layer found gaps that code review had not found, because neither code review nor the agents could see call volume or budget consumption from the output alone.</p>
+<h2>The CI gate: repeatable evaluation, zero LLM calls</h2>
+<p>The telemetry is for operational diagnosis after a run. The eval harness serves a different purpose: it gives the coding agent a quality verdict on every code change, before anything ships, without running against real documents and without any cloud cost.</p>
+<p>When the agent makes a change, it can run the eval tests locally and know immediately whether answer quality has held. In the automated build pipeline, the same tests run on every commit: if answers have regressed against the known-good set, the build fails.</p>
+<p>This is only possible because the pipeline tests use pre-written expected answers rather than an LLM judge. The harness enforces this in code. Requesting scoring metrics without a pre-written answer raises an error before any model call is attempted.</p>
+<p>https://gist.github.com/paterake/e9bd88dc7b292fb3f3888f821c5b5aa3</p>
+<p><em>The harness enforces the pipeline boundary in code: no model call is made without a pre-written expected answer.</em></p>
+<h2>What I learned</h2>
+<p>The operational layer existed before I knew what to call it. The first version was a circuit breaker event and a retry counter. The fourteenth primitive came much later. I planned none of them. Each one solved something the signals eventually made visible.</p>
+<p>Two modules I thought were done had structural problems I could only see once the OSS signals were in place. The classifier's call volume was wrong. The visualisation pipeline's budget allocation was wrong. Both had passed code review. Neither was visible from the output alone.</p>
+<p>The agent-initiated refactor was the moment the system started working as intended. The agent could evaluate its own implementation against the signals it was emitting, find the OSS solution that covered the same ground more completely, and apply the replacement. That is what I had wanted from the beginning, more or less. The signals made that possible.</p>
+<p>Not one of those fixes waited for a human to notice.</p>
+<p>When the pipeline processes ten years of historical enterprise data in a single run, there is no practical path for a human to verify the outputs. The LLMOps and RAGOps signals are the verification: budget guardrails cap runaway spend, circuit breakers catch provider stalls, eval gates confirm retrieval quality has not regressed, and the run review verdict names what to inspect if anything has. The agent reads the evidence bundle and acts on what the signal values show.</p>
+<p>I set the constraints. Everything else is the agent.</p>
+<h2>Repro notes</h2>
+<ul>
+<li>Run conditions: 2026-05; Apple M3 Pro, 18GB RAM; all inference via Ollama <code>localhost:11434</code>; Python 3.13 with UV workspace</li>
+<li>CI gate: repeatable evaluation mode with zero judge/LLM calls (no cloud required)</li>
+<li>RAGAS version: 0.4.3; pybreaker version: 1.4.1; judge metrics use an Ollama-hosted model via
+  the OpenAI-compatible <code>/v1</code> endpoint (no cloud API calls)</li>
+<li>What is not reproducible from this article: domain-specific config values, prompt schemas,
+  internal workload profiles</li>
+</ul>
+<h2>Key takeaways</h2>
+<ul>
+<li>Fourteen primitives give a coding agent a complete evidence layer to diagnose failures from a single run ID, without touching source data, model outputs, or prompts.</li>
+<li>OSS signals (RAGAS, pybreaker, OpenTelemetry) found structural problems in two modules that code review had passed; those problems were invisible without the signals.</li>
+<li>At the scale of years of enterprise data, the LLMOps and RAGOps signals replace human verification; the agent reads the evidence and acts.</li>
+</ul>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
+
+</body>
+</html>

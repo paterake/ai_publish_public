@@ -2,39 +2,34 @@
 <html>
 <body>
 
-<h1>Every LLM Module Rebuilds the Same Infrastructure. Here's How to Stop.</h1>
+<h1>Wire the LLM Plumbing Once. Every Agent Session Inherits It.</h1>
 <p>Image created by the author using Midjourney</p>
-<p><em>When a coding agent can regenerate anything on demand, duplicated code stops being the real problem. The real cost is context. Finite context budget plus session statefulness means every token spent on re-derived infrastructure is a token the actual work never gets. This is what that infrastructure is, and how to wire it once.</em></p>
-<p>I've seen this before, not in AI, but in data engineering.</p>
-<p>Two teams working independently, both needing to handle the same transformation logic. Neither knew the other was solving the same problem. By the time someone noticed, there were two implementations, slightly different defaults, and one was subtly wrong. Neither team knew which.</p>
-<p>The data engineering answer was to centralise the canonical layer. One implementation. Consumers inherit. Override only what differs. That's ELT thinking, separate the mechanism from the domain that uses it.</p>
-<p>Three modules in: ingest, query, the retriever starting from scratch a third time. I could see the same failure forming. Every time I started a new implementation, I was solving the same problems before I could write a line of what the module was actually for.</p>
-<p>That repeated setup friction was the signal.</p>
-<p>The traditional argument for a shared layer is code reuse: maintain one implementation instead of three slightly-divergent ones, keep maintenance cost contained. That still applies. But it understates what's actually at stake now.</p>
-<p>When a coding agent can produce a tailored, working implementation from scratch in minutes, re-implementation stops being expensive. The cost of duplication shrinks. But tech debt doesn't. Security vulnerabilities and unreviewed logic accumulate faster at agent speed, not slower.</p>
+<p><em>Every agent session building software that calls an LLM starts by re-laying the same plumbing before any real work can begin: config loading, model wiring, vector store setup. Identical every time, rebuilt as if never solved. Every token spent on infrastructure that already exists is a token the actual work never gets. This is what that plumbing is, and how to wire it once so every session inherits it instead.</em></p>
+<p>While building a RAG pipeline with three distinct stages, each stage created in a fresh context session. Every session rebuilt the same plumbing before the actual work could start. The first ingested documents into a vector store. The second queried it. The third built the retrieval layer that answered questions from the ingested data. The problem being solved was different each time. The pre-conditions were identical.</p>
+<p>The traditional argument for a shared layer is code reuse: the same logic behind canonical transformation layers in data engineering. One implementation. Consumers inherit. Override only what differs. That still applies. But it understates what's actually at stake now.</p>
+<p>When a coding agent can produce a tailored, working implementation from scratch in minutes, re-implementation stops being expensive. The cost of duplication shrinks.</p>
 <p>What doesn't get thinner is context. A session has a fixed window.</p>
 <p>In a typical 50-turn agentic session, context grows from roughly 5,000 input tokens at turn one to 25,000 – 35,000 by turn 30. That window has to carry everything the session has read, written, and encountered so far.</p>
-<p>The plumbing is identical every time: same config shape, same provider wiring, re-derived as if never solved. Every session rebuilds what the last one already built, and those tokens never reach the actual problem.</p>
+<p>The plumbing is identical every time: same config shape, same LLM provider wiring, re-derived as if never solved. Every session rebuilds what the last one already built, and those tokens never reach the actual problem.</p>
 <p>The shared primitives layer is an answer to that. Not primarily a code quality decision. A token economy decision.</p>
 <h2>What kept getting in the way</h2>
-<p>The first module loaded documents, chunked them, embedded them, and persisted the results to a vector store. Before any of that could run, there were setup problems to solve first: how to load and validate config, which model to call and how to wire it, how to set up the vector store client and storage context, what the default retrieval knobs should be.</p>
+<p>The ingest stage loaded documents, chunked them, embedded them, and persisted the results to a vector store. Before any of that could run, there were setup problems to solve first: how to load and validate config, which model to call and how to wire it, how to set up the vector store client and storage context, what the default retrieval knobs should be.</p>
 <p>Those aren't document-loading concerns. They're pre-conditions. Infrastructure that has to exist before the actual work can begin.</p>
-<p>The next module answered questions from that knowledge base: hybrid search, synthesis, citations. A different problem entirely. Same pre-conditions, resolved again from scratch, slightly differently, because each development session starts clean with no memory of what a previous session decided for a different module.</p>
-<p>It didn't matter what came after. Classification, document generation, chart synthesis, multi-turn exploration: each started from the problem at hand and hit the same blockers before any of it could run. And one more appeared consistently: every module needed a command line, and each was building its own argument contract from scratch.</p>
-<p>The problem being solved was different every time. The pre-conditions were the same every time.</p>
+<p>The next two stages answered questions from that knowledge base: hybrid search, synthesis, citations. A different problem entirely. Same pre-conditions, resolved again from scratch, slightly differently, because each development session starts clean with no memory of what a previous session decided for a different stage.</p>
+<p>It didn't matter what came after. Classification, document generation, chart synthesis, multi-turn exploration: each started from the problem at hand and hit the same blockers before any of it could run. And one more appeared consistently: every workload needed a command line, and each was building its own argument contract from scratch.</p>
 <p>That was the moment the primitives became visible, not as a design choice, but as a recognition that the same problems kept getting in the way. The question became: what if those things were solved once?</p>
 <h2>The primitives</h2>
-<p>The primitives share a common configuration schema every module inherits. It captures the execution options every module needs to decide before it can run: which model, which provider, where knowledge is stored, how retrieval behaves, how to chunk.</p>
-<p>A module specifies only what it changes; a shared baseline handles the rest. The result is a complete, deterministic runtime view with no decisions left implicit.</p>
+<p>The primitives share a common configuration schema every workload inherits. It captures the execution options every workload needs to decide before it can run: which model, which provider, where knowledge is stored, how retrieval behaves, how to chunk.</p>
+<p>Each workload specifies only what it changes, a shared baseline handles the rest. The result is a complete, deterministic runtime view with no decisions left implicit.</p>
 <ul>
-<li>Shared baseline: one file per implementation, covering model, provider, storage, retrieval, and chunking with known-good defaults</li>
+<li>Shared baseline: one file per workload, covering model, provider, storage, retrieval, and chunking with known-good defaults</li>
 <li>Module override: typically 4–8 keys, only what this workload changes</li>
 <li>Merged result: a complete, deterministic runtime view, ready to drive the primitives</li>
 </ul>
-<p>Treat the schema as the foundation. The primitives are the reusable entry points that read it and turn it into working components:</p>
+<p>Built on that config layer, the primitives provide the entry points a workload needs before any actual work can start:</p>
 <ul>
-<li>Config loading: merge a minimal module override over known-good defaults, so the runtime view is complete and deterministic.</li>
-<li>Model wiring: one call to produce the embedding model and one to produce the LLM object, both driven by config rather than provider SDK code in the module.</li>
+<li>Config loading: resolves the merged runtime view from baseline and module override.</li>
+<li>Model wiring: one call to produce the embedding model and one to produce the LLM object, both driven by config rather than provider SDK code in the calling code.</li>
 <li>Portable LLM calls: one caller that routes to local or cloud providers and normalises tuning keys.</li>
 <li>Framework-native LLM wrapper: the same provider routing exposed through a framework-friendly interface.</li>
 <li>Vector store setup: a small set of helpers to create the client, attach it to a storage context, and list or discover collections consistently.</li>
@@ -42,46 +37,35 @@
 <li>CLI contract: parse a YAML spec so the command’s <code>--help</code> stays authoritative.</li>
 </ul>
 <h3>Provider-portable LLM calls and model wiring</h3>
-<p>A single portable interface handles all providers. The provider is an environment variable: local by default (Ollama runs natively on Apple Silicon, within the 18GB unified memory constraint), any cloud provider for production. Module code is identical either way. It normalises tuning options across providers so the caller never has to know which provider is handling the request or how it names its parameters.</p>
-<p>The module below runs identically against a local Ollama server or a cloud API; the only difference is what <code>AI_AGENT_CORE_PROVIDER</code> is set to:</p>
-<pre><code class="language-python">from ai_agent_core.llmops import LLMCaller
-
-caller = LLMCaller(module=&quot;my_module&quot;, model=&quot;qwen2.5:7b&quot;)
-result = caller.chat(
-    &quot;Summarise this in one sentence.&quot;,
-    call_site=&quot;synthesise&quot;,
-    options_override={&quot;temperature&quot;: 0.1, &quot;max_tokens&quot;: 512}
-)
-</code></pre>
+<p>A single portable interface handles all providers. The provider is an environment variable: local by default (Ollama runs natively on Apple Silicon, within the 18GB unified memory constraint), any cloud provider for production. The calling code is identical either way. It normalises tuning options across providers so the caller never has to know which provider is handling the request or how it names its parameters.</p>
+<p>The example below runs identically against a local Ollama server or a cloud API; the only difference is what <code>AI_AGENT_CORE_PROVIDER</code> is set to:</p>
+<p>https://gist.github.com/paterake/7cd4e050dd60b63fb8c2c3b223526718</p>
 <p><em>Provider-portable LLM call, identical invocation whether the endpoint is local Ollama or a cloud API.</em></p>
-<p>For modules that need a framework-native LLM object rather than a direct call (LlamaIndex, for instance), a companion wrapper exposes the same provider logic through the interface those frameworks expect: same environment variable, same provider routing, no additional configuration. Model wiring follows from config, one call per model type produces the model objects the framework expects. The config drives it; the module receives ready-to-use objects.</p>
+<p>For workloads that need a framework-native LLM object rather than a direct call (LlamaIndex, for instance), a companion wrapper exposes the same provider logic through the interface those frameworks expect: same environment variable, same provider routing, no additional configuration. Model wiring follows from config, one call per model type produces the model objects the framework expects. The config drives it; the caller receives ready-to-use objects.</p>
 <h3>Vector store and knowledge base setup</h3>
-<p>For solutions that need a knowledge base, the primitive provides a small set of helpers for vector store setup: create the client, create the storage context, and list collections. The primitive resolves persist path, storage context, and collection naming consistently from the shared config. Modules that make no retrieval calls don't need it.</p>
+<p>For solutions that need a knowledge base, the primitive provides a small set of helpers for vector store setup: create the client, create the storage context, and list collections. The primitive resolves persist path, storage context, and collection naming consistently from the shared config. Workloads that make no retrieval calls don't need it.</p>
 <h3>Retrieval defaults and query engine</h3>
-<p>For modules that query a knowledge base, the config schema carries opinionated starting points: hybrid search on, top-k at five, reranking off, context budget capped. They emerged from building each module from scratch, noticing what kept working, then distilling the pattern into a shared baseline so subsequent modules inherit rather than re-derive. Hybrid search, combining BM25 sparse retrieval with dense vector search, is the baseline because it consistently improves recall for exact terms and citations without application-level tuning. On this platform, 7–9B models are the working size. That memory limit makes larger models impractical. Smaller models miss exact-term matches that a 70B model would catch: rule references, regulation codes, entity names. Hybrid retrieval compensates structurally rather than by upgrading model size. That held across every module I built on this platform; highly specific or multilingual corpora may need tuning before treating it as a safe default.</p>
-<p>Reranking is off by default because it adds per-query compute; it belongs in modules where precision matters more than throughput. I left it off for most of the platform and turned it on only where retrieval quality became the bottleneck. That ordering matters. A module overrides these when it has a reason. The baseline is correct in the absence of one.</p>
-<p>The primitive extends to a query engine that combines the retriever and LLM synthesis into a single call, the full retrieval loop driven by the same config knobs behind one entry point. Modules that need the full path use it; modules that only need the retriever use the retrieval primitive directly.</p>
+<p>For workloads that query a knowledge base, the config schema carries opinionated starting points: hybrid search on, top-k at five, reranking off, context budget capped. They emerged from building each one from scratch, noticing what kept working, then distilling the pattern into a shared baseline so subsequent workloads inherit rather than re-derive. Hybrid search, combining BM25 sparse retrieval with dense vector search, is the baseline because it consistently improves recall for exact terms and citations without application-level tuning. On this platform, 7–9B models are the working size. That memory limit makes larger models impractical. Smaller models miss exact-term matches that a 70B model would catch: rule references, regulation codes, entity names. Hybrid retrieval compensates structurally rather than by upgrading model size. That held across every workload I built on this platform; highly specific or multilingual corpora may need tuning before treating it as a safe default.</p>
+<p>Reranking is off by default because it adds per-query compute; it belongs in workloads where precision matters more than throughput. I left it off for most of the platform and turned it on only where retrieval quality became the bottleneck. That ordering matters. Each workload overrides these when it has a reason. The baseline is correct in the absence of one.</p>
+<p>The primitive extends to a query engine that combines the retriever and LLM synthesis into a single call, the full retrieval loop driven by the same config knobs behind one entry point. Workloads that need the full path use it; those that only need the retriever use the retrieval primitive directly.</p>
 <h3>Config-driven CLI contract</h3>
 <p>Runnables share a single CLI argument contract, defined in a YAML spec. The entry point parses it with a single call. The <code>--help</code> output is authoritative, there is no separate CLI documentation to maintain or drift from the actual interface. For the first two commands, a shared YAML spec looks unnecessary. By the fifth, changing a CLI contract is a ten-minute edit and a working <code>--help</code>.</p>
 <h2>Why documentation is not the constraint</h2>
 <p>Once these primitives existed, the problem was not whether they were documented. The problem was whether a new development session, building the next implementation, would use them or rebuild them.</p>
-<p>Agent-driven development is fast. It is also stateless. A session building a classification module starts from what it needs to do and works outward. It has no memory of what the previous session resolved for a different module. It doesn't know a shared config loader exists. So it builds one. Slightly differently. Shared infrastructure falls between session scopes; no single session is responsible for it, so none maintain it.</p>
+<p>Agent-driven development is fast. It is also stateless. A session building a classifier starts from what it needs to do and works outward. It has no memory of what the previous session resolved for a different workload. It doesn't know a shared config loader exists. So it builds one. Slightly differently. Shared infrastructure falls between session scopes; no single session is responsible for it, so none maintain it.</p>
 <p>Documentation doesn't solve this. A rule that says "use the shared layer for config loading" competes with all the domain-specific context in the session. Under enough session length and task-specific signal, soft guidance loses.</p>
-<p>The structural fix is an import dependency. When a new module must import the shared layer rather than build its own, the primitive is used regardless of what the session remembers, or doesn't. This is not a process problem or a discipline problem. Statefulness is the architecture of how coding sessions work; no amount of better documentation or guidance changes that. The constraint has to be structural because the cause is structural.</p>
-<p>The answer isn't documentation. The answer is making it the only path — the same logic as the canonical layer in data engineering.</p>
+<p>The structural fix is an import dependency. When a new implementation must import the shared layer rather than build its own, the primitive is used regardless of what the session remembers, or doesn't. This is not a process problem or a discipline problem. Statefulness is the architecture of how coding sessions work; no amount of better documentation or guidance changes that.</p>
+<p>The same logic as the canonical layer in data engineering.</p>
 <h2>The primitives held when it expanded</h2>
-<p>I added classification and visualisation modules after the primitives layer was in place. Both are operationally distinct from the earlier modules. Classification added taxonomy constraints, confidence gating, and structured output; visualisation added chart insight generation and formatted response schemas. Different problems, different output shapes.</p>
+<p>I added classification and visualisation modules after the primitives layer was in place. Both are operationally distinct from the earlier ones. Classification added taxonomy constraints, confidence gating, and structured output; visualisation added chart insight generation and formatted response schemas. Different problems, different output shapes.</p>
 <p>Both hit the same pre-conditions before any of the actual work could begin.</p>
 <p>Neither required a new primitive.</p>
-<p>That is the test: not whether the primitives work for the implementations they were discovered through (they will), but whether they hold when the next implementation is different enough to matter. These two were different enough.</p>
-<h2>Before you build: check what already exists</h2>
-<p>The package ships a primitives index, organised by what you need, not by what the library is called. Always start with the index. Before writing any config loading, model wiring, or vector store setup for a new module, the index is the right first stop. It maps each common need to the exact import and flags which things are already solved so you don't solve them again.</p>
-<pre><code class="language-bash">uv add ai-agent-core
-ai-agent-primitives-index
-</code></pre>
-<p><em>Primitives index, organised by what you need rather than by what the library provides.</em></p>
-<p>That output is the shopfront. If what you need is listed, use it. If it is not listed, it belongs in your module.</p>
-<p>Local setup is Ollama for model serving plus <code>uv add ai-agent-core</code>; ChromaDB and LlamaIndex come as dependencies. Switching to a cloud provider is an environment variable change, not a code change.</p>
+<p>That is the test: not whether the primitives work for the workloads they were discovered through (they will), but whether they hold when the next workload is different enough to matter. These two were different enough.</p>
+<h2>Before any session builds: check what already exists</h2>
+<p>The package ships a primitives index, organised by need, not by what the library is called. A new session building the next implementation starts by running <code>ai-agent-primitives-index</code>. Each entry maps a common need to the exact import, annotated with what the primitive provides in one line. Before writing any config loading, model wiring, or vector store setup, the session checks here first. If what it needs is listed, it uses it. If not, it belongs in the workload.</p>
+<p>https://gist.github.com/paterake/8620ae8cc195a6a4675f43929935638f</p>
+<p><em>Primitives index — ten primitives, each mapped to the need it covers.</em></p>
+<p>The primitives ship as <code>ai-agent-core</code>. Local setup is Ollama for model serving plus <code>uv add ai-agent-core</code>; ChromaDB and LlamaIndex come as dependencies. Switching to a cloud provider is an environment variable change, not a code change.</p>
 <h2>The platform the primitives enable</h2>
 <ul>
 <li><strong>Ingest</strong> — PDF/XML/Excel → ChromaDB + BM25 + JSON sidecars</li>
@@ -93,11 +77,11 @@ ai-agent-primitives-index
 <li><strong>Orchestration</strong> — UI + tool-calling agent + MCP server over the same orchestrator</li>
 <li><strong>Substrate</strong> — Deterministic knowledge graph from JSON sidecars (no LLM)</li>
 </ul>
-<p>Eight implementations. Every one uses the same primitives as its foundation.</p>
+<p>Eight implementations. The substrate module makes no LLM calls and carries no primitives dependency; it builds on a graph library directly. Every other implementation uses the same primitives as its foundation.</p>
 <h2>What I learned building this</h2>
 <p>The primitives became visible through friction, not design.</p>
-<p>The compounding started at module one, even though it only became visible at module three. By the time the pattern was clear, the cost had already been paid several times over. It should have existed before the first module, not after the third made the pattern visible.</p>
-<p>Declaring it as a package dependency in each module was what made it structural. A new session building the next implementation got the primitives whether it went looking for them or not. The agent didn't change. What changed was how much of the problem it arrived at already solved.</p>
+<p>The compounding started at the first stage, even though it only became visible at the third. By the time the pattern was clear, the cost had already been paid several times over. It should have existed before the first stage, not after the third made the pattern visible.</p>
+<p>Declaring it as a package dependency in each workload was what made it structural. A new session building the next implementation got the primitives whether it went looking for them or not. The agent didn't change. What changed was how much of the problem it arrived at already solved.</p>
 <p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
 
 </body>

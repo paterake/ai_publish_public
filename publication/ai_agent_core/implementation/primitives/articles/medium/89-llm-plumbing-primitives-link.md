@@ -1,3 +1,2 @@
-Wrote this up in full on Medium for anyone who wants the complete picture, why the real cost of re-derived LLM plumbing isn't code quality, it's context budget, and what one shared layer does to stop that:
-
+Wrote this up in full on Medium for anyone who wants the complete picture, how wiring the LLM plumbing once means every agent session starts at the domain problem with its full context budget intact, not half-spent on setup:
 _add Medium URL_
