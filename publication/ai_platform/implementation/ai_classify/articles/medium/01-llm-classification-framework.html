@@ -2,206 +2,155 @@
 <html>
 <body>
 
-<h1>The Wrong Way to Use AI for Classification — and What to Build Instead</h1>
-<p>Calling an LLM for every record is the obvious approach to bulk text classification. It is also the wrong one. Here is the design that classifies 63,000 records locally, at zero API cost — and the non-obvious failures that nearly derailed it.</p>
-<h2>Key takeaways</h2>
-<ul>
-<li>A reuse-first waterfall (exact → fingerprint → fuzzy → semantic → cluster → LLM) cuts LLM calls without guessing.</li>
-<li>Resume semantics are a feature: checkpoints and deterministic row keys make multi-day runs safe to stop and restart.</li>
-<li>Prompt and output budgets matter: removing unnecessary fields and capping bulk output produced a measured 14× speed-up on the LLM-only path.</li>
-</ul>
-<h2>Who this is for</h2>
-<p>You are building a bulk classifier over messy text and you have already tried “LLM per record” (or you are about to).</p>
-<h2>What you’ll learn</h2>
-<ul>
-<li>Why “deterministic first, AI last” is an architecture choice, not an optimisation</li>
-<li>How a reuse-first waterfall reduces LLM calls without turning quality into guesswork</li>
-<li>Which failure modes only appear at scale (and what fixes actually held)</li>
-</ul>
-<h2>Constraints</h2>
-<ul>
-<li>Local-first operation (privacy and governance constraints assumed)</li>
-<li>Large batch backfills (resume semantics matter more than elegance)</li>
-</ul>
+<h1>How I Cut a 14-Day Local LLM Classification Job to 87 Hours</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>63,053 incident tickets reclassified on a laptop, with the LLM as a last resort instead of the default.</em></p>
+<p>I needed to reclassify a decade of service desk records: 63,053 incident tickets, re-mapped to a new root-cause taxonomy, with a hard deadline of five days. The data had to stay on-machine. Cloud APIs were not an option.</p>
+<p>The naive approach (LLM per record) would have taken around 14 days on a local 7B model. The business window would have closed before the run finished.</p>
+<p>The implementation the coding agent built instead completed in 87 hours on a MacBook, unattended. Coding agents (Claude Code and Trae) monitored the run through structured telemetry artefacts rather than the raw incident data. Small tests looked fine. The problems only showed up in the telemetry after the run passed 10,000 rows.</p>
+<p>The interesting part was not better prompting. It was finding a way to reuse earlier decisions fast enough to keep the batch on schedule, then instrumenting the run well enough for the agent to keep improving it without reading the tickets.</p>
 <h2>Why LLM-per-record fails at scale</h2>
-<p>Most organisations accumulate text-heavy records — tickets, incidents, emails, surveys — that need to be categorised into a controlled taxonomy for routing, analytics, and compliance. Manual triage doesn't scale. Rules-based systems break as language drifts. So the obvious move is: call an AI model for every record.</p>
-<p>Here is what that actually looks like at scale.</p>
-<p>A 10-year incident backlog: <strong>63,053 records</strong>. At five seconds per LLM call — a realistic estimate for a local 7B model — that is <strong>87 hours of uninterrupted processing</strong>. And that assumes: no crashes, no timeouts, no retries, no restarts. It also assumes the data can leave the machine. In organisations with sensitive operational data — incident descriptions, system names, user IDs — it often can't.</p>
-<p>The naive approach fails at scale not because AI is bad at classification. It fails because calling AI for <em>every</em> record is architecturally wrong.</p>
-<h2>The Failure of Obvious Approaches</h2>
-<p>Before describing what works, it's worth being honest about what doesn't.</p>
-<p><strong>Naive LLM pipeline:</strong> Call the model for every row. Works for 100 records. Crawls at 10,000. Breaks overnight at 63,000. Any crash loses progress. No way to resume. No way to audit whether the model made a consistent decision about the same text twice.</p>
-<p><strong>Simple caching:</strong> Cache LLM responses keyed on exact text. Works for perfectly identical tickets. Useless for real datasets where the same incident is described in ten different ways ("server is down", "srv not responding", "cannot connect to srv — urgent"), none of which share enough characters to match.</p>
-<p><strong>Fuzzy matching only:</strong> Works for near-duplicate text. Fails when two tickets describe the same problem in completely different words — same meaning, zero shared vocabulary. Fuzzy string matching cannot bridge that gap.</p>
-<p><strong>The gap:</strong> No single strategy is sufficient. Exact matching is too strict. Fuzzy matching is too shallow. LLMs are too slow and too expensive for every record. The solution is not to choose one — it is to layer all of them, in the right order, with strict quality gates at each layer.</p>
-<h2>The Insight: Deterministic First, AI Last</h2>
-<p>The key design principle is not "use AI better." It is: <strong>use AI as little as possible</strong>.</p>
-<p>Every time a decision can be made deterministically — same result every time, instantly, with no possibility of hallucination — it should be. The LLM is called only when every deterministic and statistical shortcut has been exhausted.</p>
-<p>This sounds obvious in retrospect. In practice, most AI classification pipelines are built the other way around: AI first, with occasional caching bolted on later as an optimisation. Inverting the order changes the architecture entirely.</p>
-<h2>The Architecture: A Six-Layer Reuse Waterfall</h2>
-<p>For each record, the classifier evaluates six strategies in order — cheapest and most deterministic first, LLM last:</p>
+<p>The records were text-heavy (tickets, incidents, emails, surveys) and needed to be categorised into a controlled taxonomy for routing, analytics, and compliance. Manual triage did not scale. Rules-based systems got less accurate over time as people described the same problems in different words. So the obvious move was to call a model for every record.</p>
+<p>That approach broke as soon as the project had both volume and a hard constraint.</p>
+<p>In this case the constraint set looked like this:</p>
+<ul>
+<li>63,053 records spanning roughly a decade of incidents</li>
+<li>A new taxonomy (Type → Category → Subcategory) with 105 categories across 9 failure types</li>
+<li>No labelled training data for that taxonomy</li>
+<li>Local-only processing, no data egress</li>
+<li>A fixed business deadline</li>
+</ul>
+<p>Supervised ML was not an option. To train a 105-category classifier, the project would have needed labelled examples across the category set. The whole point of the project was that those labels did not exist yet.</p>
+<p>So the path was LLM-based zero-shot classification. The trick was finishing on time.</p>
+<p>Even with enough time, LLM-per-record gave me no audit trail by default: no cheap way to answer "which decisions were reused?" or "what changed when the run resumed?" unless I built that layer explicitly.</p>
+<p>And the usual "just add a semantic cache" answer did not solve it. A semantic cache helped when the same or very similar prompt came back later. In this batch, I only processed each ticket once, even though many tickets described the same underlying incident pattern in different words. I needed reuse based on the pattern, not repeated prompts.</p>
+<p>One option was to skip generation entirely: embed the 105 category descriptions, embed each ticket, and assign the nearest label. It was fast, tens of milliseconds per record, and it avoided an LLM call entirely. But on a three-level taxonomy with overlapping domain language, nearest-label matching kept confusing categories that used similar words. It also had no reliable way to say "none of these fits."</p>
+<p>The implementation still used embeddings, but as a reuse mechanism. The first time a pattern appeared, the LLM made the decision. After that, semantically similar tickets reused it at embedding speed. That led directly to the routing pattern.</p>
+<h2>The pattern: deterministic first, LLM last</h2>
+<p>The work started with small samples, first 100 rows, then 1,000. Almost everything still fell through to the LLM. At that rate the batch would miss the deadline, and the model kept solving the same patterns over and over.</p>
+<p>That pointed to a routing problem, not a prompt problem. If the run had already seen the pattern, the LLM should not be deciding it again.</p>
+<p>So the coding agent stopped tuning prompts and changed the routing.</p>
+<p>Deterministic and similarity checks moved to the front of the pipeline. The LLM moved to the end and handled only genuinely new tickets. That raised the next question: how many reuse layers did the system actually need?</p>
+<h2>Why one cache layer is not enough</h2>
+<p>"Add a cache" sounds like one idea. In practice there are multiple similarity problems hiding inside each other.</p>
+<p>Exact-match caching (keyed by raw text) only caught perfectly identical tickets. The dataset was full of near-duplicates: "server is down", "srv not responding", "cannot connect to srv, urgent". These described the same failure, but they did not match byte-for-byte.</p>
+<p>Fuzzy string matching caught typos and small edits, but it failed when meaning stayed the same and wording changed completely.</p>
+<p>Embedding similarity solved that meaning gap, but a single semantic cache layer still missed too much at the start of a batch run when there were no prior decisions to reuse and the cache was empty. In a live endpoint, the same or similar query arrived again next week and the cache paid off. In a one-off reclassification run, every early miss still triggered a full LLM call, and if that miss rate stayed high the batch missed the deadline.</p>
+<p>The waterfall worked because it used the cheapest possible signal first and reserved embeddings and generation for the cases that actually needed them.</p>
+<p>That only worked if the pipeline classified the right text in the first place. Feeding it noisy or contradictory fields made every layer worse, from fingerprinting through to the LLM.</p>
+<h2>The noisy field problem (what text did I actually classify?)</h2>
+<p>My service desk tickets rarely had one clean text field. They had a short description, a long description, a resolution note, and free-text comments. These were often contradictory.</p>
+<p>Concatenating everything fed the model noise that actively undermined the problem statement. The short description might say "User cannot log in". The resolution might say "Done".</p>
+<p>So I applied a selection policy per run:</p>
+<ul>
+<li><code>priority_first_meaningful</code>: walk a ranked list of columns and pick the first that clears a minimum length threshold</li>
+<li><code>concat_all</code>: concatenate capped fields up to a global limit for datasets where the short description is routinely useless</li>
+</ul>
+<p>Before any downstream layer ran, I cleaned the chosen text (strip HTML, remove boilerplate like "resolved" and "done", normalise whitespace).</p>
+<p>In parallel, I produced a second representation that I never sent to the LLM. I used it for matching only: lowercase, strip HTML, replace variable identifiers (emails, URLs, IPs, ticket IDs, long numbers) with typed tokens, then strip non-word characters. That was what made two "different" tickets hash the same way.</p>
+<p>Once the text stayed consistent, I could start reusing decisions safely.</p>
+<h2>The reuse waterfall</h2>
+<p>I did not design the waterfall upfront. The coding agent built it iteratively from run telemetry. When telemetry showed high LLM fallback on tickets that were structurally similar to ones already processed, the agent added or tightened the next reuse layer and reran, without ever inspecting the incident text.</p>
+<p>Before the waterfall ran, I applied a deterministic rule layer. Config-declared regex patterns mapped known-certain phrases directly to taxonomy categories (for example a password reset pattern), bypassing all caches and the LLM.</p>
+<p>After that, each ticket tried strategies in order, cheapest first, LLM last:</p>
 <ol>
-<li><strong>Exact match cache</strong> — identical text, same taxonomy choices: instant, 100% safe</li>
-<li><strong>Fingerprint cache</strong> — normalised near-duplicate hash: instant, no hallucination risk</li>
-<li><strong>Fuzzy string match</strong> — Jaro-Winkler similarity: fast (~1ms), catches typos and minor edits</li>
-<li><strong>Semantic cache</strong> — embedding cosine similarity: ~30ms, catches same meaning in different words</li>
-<li><strong>Cluster reuse</strong> — centroid cosine similarity: ~30ms, catches recurring patterns across records</li>
-<li><strong>LLM fallback</strong> — local inference only; no data leaves the machine</li>
+<li>Fingerprint cache (sha256 of normalised text, essentially free)</li>
+<li>Fuzzy string match (Jaro-Winkler, around 1ms)</li>
+<li>Semantic cache (embedding cosine, around 30ms)</li>
+<li>Cluster reuse (centroid cosine against accumulated cluster centroids, around 30ms)</li>
+<li>LLM fallback (<code>qwen2.5:7b</code> via Ollama, around 5 to 20s)</li>
 </ol>
-<p>The order is not arbitrary. Each layer covers a class of similarity that the layer above cannot. Fuzzy matching catches near-identical text; semantic matching catches near-identical <em>meaning</em> — cases where two tickets share no words but describe the same problem. Fuzzy sits before semantic because it is two orders of magnitude cheaper. Semantic sits before LLM because even at ~30ms per embedding call, it is 100× faster than a generation call.</p>
-<p><strong>Reuse is permitted only when all guards pass:</strong>
-- The taxonomy version fingerprint matches (prevents reusing decisions from a previous taxonomy revision)
-- The similarity score exceeds a strict threshold (0.975+ for semantic; 0.96+ for fuzzy)
-- The prior result was auto-accepted (not flagged for human review)
-- The prior confidence score exceeds the minimum threshold</p>
-<p>If any guard fails, the pipeline falls through to the next layer. There is no silent degradation.</p>
-<h2>The Non-Obvious Engineering Problems</h2>
-<p>Building the pipeline is straightforward. Making it survive 63,000 records, multiple crashes, and 80 hours of continuous operation is where the real engineering happened. Here are the failures that were only visible at scale.</p>
-<h3>The Python Falsy Bug That Silenced All Caches</h3>
-<p>After the first restart of the live run, the semantic and cluster caches were showing zero entries on disk — even though thousands of rows had been processed.</p>
-<p>The root cause: four lines in the classifier all looked like this:</p>
-<pre><code class="language-python">if self._semantic_cache and self._embedder and result.get(&quot;status&quot;) == &quot;auto_accepted&quot;:
-    # seed the cache
-</code></pre>
-<p>This is idiomatic Python. It is also wrong. Python evaluates <code>bool(obj)</code> by calling <code>obj.__len__()</code>. An empty semantic cache has <code>len() == 0</code>, so <code>bool(empty_cache)</code> is <code>False</code>. The cache object existed, was initialised correctly — but was treated as falsy every single time. All four seeding conditions were skipped from row 1 of every run.</p>
-<p>The fix is four characters: <code>is not None</code>.</p>
-<pre><code class="language-python">if self._semantic_cache is not None and self._embedder is not None and ...:
-</code></pre>
-<p>This is the kind of bug that never appears in unit tests, because test fixtures rarely use genuinely empty objects with <code>__len__</code> defined. It only surfaces when you run 10,000 rows and notice the cache file is still 0 bytes.</p>
-<p><strong>The lesson:</strong> In Python, <code>if obj:</code> and <code>if obj is not None:</code> are not interchangeable. Any object that implements <code>__len__</code> will evaluate as falsy when empty. Cache-like objects, index-like objects, and collection-like objects all have this property.</p>
-<h3>The Embedder That Permanently Disabled Itself</h3>
-<p>The original <code>OllamaEmbedder</code> implementation had a simple failure handler:</p>
-<pre><code class="language-python">except Exception:
-    self._disabled = True
-</code></pre>
-<p>One transient Ollama timeout — the kind that happens when the LLM model and the embedding model compete for the same process resources — and the embedder was permanently disabled for the rest of the run. All semantic and cluster reuse silently stopped. The system continued, still classifying correctly via the LLM, with no error — just a permanent, silent performance regression.</p>
-<p>The fix replaces the permanent disable with a circuit breaker: 2 retries at 0.5s flat delay, trips after 10 consecutive failures, auto-recovers on the first success. The 0.5s delay is not arbitrary — it is calibrated to Ollama's typical recovery time after resource contention, while keeping worst-case retry overhead at ~10% of a typical LLM call (0.5s vs ~5s).</p>
-<p>There is also a secondary effect: when the embedder is disabled by the circuit breaker, Ollama's resources are no longer split between two simultaneous model calls. The LLM gets the full GPU allocation. This produced a measurable throughput improvement for LLM-only rows even when the embedding path was inactive.</p>
-<h3>The Crash-Resume Duplicate Problem (and the Fix)</h3>
-<p>The output format is JSONL — an appendable, line-delimited file rather than a database write
-or in-memory accumulator. This is a deliberate engineering choice for pipelines that run for
-hours or days: a crash at row 40,000 of 63,000 loses nothing already written. The file is
-not rewritten on resume — new results are appended, and a checkpoint tracks where processing
-left off.</p>
-<p>A crash mid-batch leaves a structural gap: the JSONL output file has been partially written, but the checkpoint has not been saved yet (it saves at the end of each batch). If you resume naïvely, you can re-process and re-append those rows — producing duplicates.</p>
-<p>The fix implemented here is a pragmatic reconciliation step: on resume, the runner scans the existing results file for <code>row_md5</code> values and adds any missing ones into the checkpoint before processing continues. That makes resume safe without requiring a full rewrite of the output protocol.</p>
-<p><strong>Lesson for anyone building resumable batch pipelines:</strong> the checkpoint save and the output write must be atomic. If they are not, crash-resume will produce duplicates. Deduplication by a deterministic row key is the safe recovery procedure.</p>
-<h3>The 14× Throughput Improvement From One Config Change</h3>
-<p>The prompt schema originally included a <code>reasoning</code> field — a short explanation of why the model chose the category. This sounds useful for auditing. In practice, it caused two problems:</p>
-<ol>
-<li>The model sometimes used the <code>reasoning</code> field to write paragraphs, exhausting the <code>num_predict</code> budget before the JSON structure closed — producing invalid output.</li>
-<li>The generation length was 2–4× longer than necessary, directly reducing rows/second.</li>
-</ol>
-<p>Removing <code>reasoning</code> from the bulk run prompt schema, and lowering <code>bulk_num_predict</code> to 128, produced a <strong>14× throughput improvement</strong> on LLM-only rows — measured on the live dataset.</p>
-<p>This is the counterintuitive result: <em>reducing</em> what you ask the model to produce <em>improves</em> classification reliability, not just speed, because shorter outputs are less likely to truncate mid-JSON.</p>
+<p>Each layer covered a different class of similarity:</p>
+<ul>
+<li>Fingerprint reuse caught "same incident, different identifiers" once the normalisation layer removed ticket IDs, hostnames, IPs, and dates.</li>
+<li>Fuzzy matching caught small edits and typos.</li>
+<li>Semantic matching caught different wording with the same meaning.</li>
+<li>Cluster reuse was a stabiliser. As the run classified more tickets, it accumulated clusters of similar tickets and reused against the centroid rather than a single prior ticket.</li>
+</ul>
+<p>I only allowed reuse when guardrails passed:</p>
+<ul>
+<li>Taxonomy version fingerprint matched</li>
+<li>Similarity score cleared a strict threshold</li>
+<li>Prior result was auto-accepted (not flagged for review)</li>
+<li><code>confidence_score</code> met the auto-accept threshold</li>
+</ul>
+<p>If any guard failed, the pipeline fell through. There was no silent degradation.</p>
+<p>The output recorded which strategy produced each classification and, when reuse occurred, the similarity score as <code>match_confidence</code>. A fingerprint hit was 1.0. Fuzzy reuse sat just above the 0.96 threshold. Embedding reuse sat above the 0.975 threshold.</p>
+<p>One representative reuse output (redacted and sanitised):</p>
+<p>https://gist.github.com/paterake/dd0a2991f5bead6bfe8d36099d399139</p>
+<h2>What only broke in the full run</h2>
+<p>Once the waterfall existed, the "AI" work was not the hard part anymore. The hard part was keeping the pipeline correct and resumable while it ran for days.</p>
+<h3>1. The Python falsy bug that silenced cache seeding</h3>
+<p>After the first restart, I still found the semantic and cluster caches empty on disk. Thousands of rows had been processed. Nothing had crashed. The run just was not seeding them.</p>
+<p>The cause was a guard that looked fine:</p>
+<p>https://gist.github.com/paterake/d0202d6348424da74d59480ddc89dc5b</p>
+<p>In Python, <code>if obj:</code> acted as a truthiness check. For collection-like objects, truthiness depended on <code>__len__</code>. An empty cache had <code>len() == 0</code>, so it evaluated falsy. The pipeline had initialised the cache correctly, then treated it as "missing" and skipped seeding on every row of every run.</p>
+<p>The fix was explicit <code>is not None</code> checks.</p>
+<p>https://gist.github.com/paterake/57b485cec22c6aec88a94bbe544dcf43</p>
+<p>This was the sort of failure that unit tests rarely caught. Test fixtures tended not to use truly empty cache objects with <code>__len__</code> implemented. A live run started cold, so it hit the edge case immediately.</p>
+<h3>2. The embedder that disabled itself permanently</h3>
+<p>The original embedder code flipped a <code>_disabled</code> flag after a single exception. One transient Ollama timeout, which was common under contention, could shut off embeddings for the rest of the run.</p>
+<p>That was a real throughput problem, not a nice-to-have cleanup. Once embeddings disappeared, more rows fell back to the LLM and the batch slowed down without a clean hard failure.</p>
+<p>The fix was a circuit breaker: a small retry budget, trip only after consecutive failures, and auto-recover on the first success. When the circuit was open, the system stopped competing for resources and the LLM-only path actually ran faster. More importantly, the downgrade stopped being silent. If embeddings were offline, telemetry showed it and the run behaved predictably.</p>
+<h3>3. Checkpoint correctness after a crash</h3>
+<p>The pipeline wrote output as JSONL (append-only) and stored progress in a checkpoint keyed by a deterministic row ID (<code>row_md5</code>). That made planned stop/resume easy.</p>
+<p>The failure case was an unplanned crash between "write output" and "save checkpoint". On resume, a naive implementation re-processed and re-appended those rows, creating duplicates.</p>
+<p>The fix was reconciliation at startup: scan the existing output file for row IDs and backfill them into the checkpoint before processing began.</p>
+<p>That mattered beyond crash recovery. The run was happening on a laptop, overnight and across working days. When telemetry showed a problem, too much LLM fallback, caches not warming, invalid-output retries, I could stop the batch, change a config value, and resume without losing completed work.</p>
+<h2>A small prompt change improved throughput</h2>
+<p>The bulk prompt schema originally included a <code>reasoning</code> field. That looked useful, but in practice it mostly created failure. The model sometimes wrote paragraphs, hit the token cap, and returned invalid JSON.</p>
+<p>I removed <code>reasoning</code> and capped <code>bulk_num_predict</code> at 128. That improved throughput on LLM-only rows and reduced invalid-output retries. Shorter outputs broke less often.</p>
+<p>Long ticket texts still overflowed context occasionally. The implementation used a prompt variant cascade, from the full prompt down to a minimal "ids only" variant, so an overflow fell through to a smaller prompt instead of failing the record.</p>
+<p>It was not elegant, but it kept the batch moving. A production serving stack with grammar constraints could guarantee schema-valid JSON at decode time and collapse the cascade into a single prompt. With Ollama in this configuration, the cascade was the practical way to keep the run alive.</p>
 <h2>What the run proved</h2>
-<p>These are measurements from a live enterprise incident backlog:</p>
-<p><strong>Metric — Value</strong></p>
+<p>The headlines:</p>
 <ul>
-<li><strong>Output records written</strong> — 63,053 (<code>reclassified.jsonl</code>)</li>
-<li><strong>Review queue size</strong> — 206 (<code>review_queue.jsonl</code>)</li>
-<li><strong>API cost</strong> — £0 — 100% local inference</li>
-<li><strong>Data leaves the machine</strong> — Never</li>
-<li><strong>Reclassification batch processed</strong> — 44,803 rows</li>
-<li><strong>Total elapsed (reclassification batch)</strong> — ~67.3 hours (242,437s)</li>
-<li><strong>Overall throughput (reclassification batch)</strong> — 0.185 rows/sec</li>
-<li><strong>Throughput at run start (LLM-only)</strong> — ~0.20 rows/sec</li>
-<li><strong>Throughput as caches warm</strong> — ~0.71 rows/sec (3.5× improvement)</li>
-<li><strong>Throughput improvement from removing reasoning field</strong> — 14× on LLM-only path</li>
+<li>Records processed: 63,053</li>
+<li>Review queue: 204</li>
+<li>Total elapsed: ~87 hours</li>
+<li>Average throughput: ~0.20 rows/sec (~725 rows/hour)</li>
+<li>API cost: £0 (100% local inference)</li>
+<li>Data left the machine: never</li>
 </ul>
-<p><strong>Strategy distribution</strong> (44,803-record reclassification batch):</p>
-<p><strong>Strategy — Records — Share</strong></p>
+<p>Not every record went through the reuse waterfall. Deterministic rules handled some records outside it. The strategy mix below focuses on the resumed segment that entered the reuse chain.</p>
+<p>The strategy mix came from the 44,803-row resumed segment (the portion with complete comparable per-strategy telemetry after the run was resumed mid-batch):</p>
 <ul>
-<li><strong>LLM fallback</strong> — 25,346 — 56.6%</li>
-<li><strong>Fingerprint cache</strong> — 6,673 — 14.9%</li>
-<li><strong>Semantic cache</strong> — 5,297 — 11.8%</li>
-<li><strong>Fuzzy match</strong> — 4,620 — 10.3%</li>
-<li><strong>Cluster reuse</strong> — 2,867 — 6.4%</li>
+<li><strong>LLM fallback</strong> — 56.6%</li>
+<li><strong>Fingerprint cache</strong> — 14.9%</li>
+<li><strong>Semantic cache</strong> — 11.8%</li>
+<li><strong>Fuzzy match</strong> — 10.3%</li>
+<li><strong>Cluster reuse</strong> — 6.4%</li>
 </ul>
-<p>The LLM handled the majority because this was a reclassification run against a new taxonomy — the caches were cold at start. In a steady-state run against an existing taxonomy, the fingerprint, semantic, and fuzzy layers handle a much larger share.</p>
-<p>The throughput improvement from cache warming is not linear. The first 10% of a run is the slowest — caches are empty, every row hits the LLM. As the fingerprint cache fills with the most common ticket templates, and the semantic cache builds a vocabulary of normalised problem types, the hit rate climbs and the LLM handles a shrinking fraction of rows.</p>
-<p><strong>End-to-end examples (major paths):</strong></p>
-<p>The raw outputs record <code>match_confidence</code> when a prior classification was reused. In this run:
-- <code>match_confidence = 1.0</code> indicates deterministic reuse (exact/fingerprint).
-- <code>0.96 ≤ match_confidence &lt; 0.975</code> indicates fuzzy string reuse.
-- <code>0.975 ≤ match_confidence &lt; 0.99</code> indicates embedding-based reuse (semantic/cluster).
-- No <code>match_confidence</code> indicates the LLM path was used (no safe reuse).</p>
-<p>Each example below is taken from the real output, with ticket text scrubbed and domain nouns abstracted.</p>
-<p>Fingerprint/exact reuse:</p>
-<pre><code class="language-json">{
-  &quot;ticket_text_sanitised&quot;: &quot;User contacted as require password reset for internal portal. User is unable to access internal portal and password reset yesterday but still not logging in.&quot;,
-  &quot;match_confidence&quot;: 1.0,
-  &quot;confidence_score&quot;: 0.9,
-  &quot;classification_status&quot;: &quot;auto_accepted&quot;,
-  &quot;category_id&quot;: &quot;subcat_non_issue_user_guidance_how_to_help&quot;,
-  &quot;category_name&quot;: &quot;Non-Issue &gt; User Guidance &gt; How-To / Help&quot;
-}
-</code></pre>
-<p>Fuzzy reuse (near-duplicate):</p>
-<pre><code class="language-json">{
-  &quot;ticket_text_sanitised&quot;: &quot;Please remove the invoice and the associated registration record.&quot;,
-  &quot;match_confidence&quot;: 0.960919540229885,
-  &quot;confidence_score&quot;: 0.9,
-  &quot;classification_status&quot;: &quot;auto_accepted&quot;,
-  &quot;category_id&quot;: &quot;subcat_data_issues_mapping_incorrect_field_mapping&quot;,
-  &quot;category_name&quot;: &quot;Data Issues &gt; Mapping &gt; Incorrect Field Mapping: Field mapped incorrectly&quot;
-}
-</code></pre>
-<p>Semantic/cluster reuse (meaning-level):</p>
-<pre><code class="language-json">{
-  &quot;ticket_text_sanitised&quot;: &quot;Unable to access a third-party platform: service unavailable. [URL] [TICKET_ID]&quot;,
-  &quot;match_confidence&quot;: 0.9893333333333333,
-  &quot;confidence_score&quot;: 0.9,
-  &quot;classification_status&quot;: &quot;auto_accepted&quot;,
-  &quot;category_id&quot;: &quot;subcat_runtime_issues_connectivity_api_failure&quot;,
-  &quot;category_name&quot;: &quot;Runtime Issues &gt; Connectivity &gt; API Failure: API unreachable or failing&quot;
-}
-</code></pre>
-<p>LLM fallback (no safe reuse):</p>
-<pre><code class="language-json">{
-  &quot;ticket_text_sanitised&quot;: &quot;Unable to create articles in a content management system.&quot;,
-  &quot;confidence_score&quot;: 0.9,
-  &quot;classification_status&quot;: &quot;auto_accepted&quot;,
-  &quot;category_id&quot;: &quot;subcat_design_issues_functional_logic_functional_logic_failure&quot;,
-  &quot;category_name&quot;: &quot;Design Issues &gt; Functional Logic &gt; Functional Logic Failure: Incorrect business logic causes incorrect outcomes&quot;
-}
-</code></pre>
-<p>Quality gate triggered (review queue outcome):</p>
-<pre><code class="language-json">{
-  &quot;ticket_text_sanitised&quot;: &quot;In relation to [TICKET_ID], the issue has not been resolved. Please reopen.&quot;,
-  &quot;confidence_score&quot;: 0.3,
-  &quot;classification_status&quot;: &quot;unclassified&quot;,
-  &quot;category_id&quot;: &quot;UNCLASSIFIED&quot;,
-  &quot;category_name&quot;: &quot;Non-Issue &gt; Non-Issue &gt; No Issue Found&quot;
-}
-</code></pre>
-<h2>What It Doesn't Do</h2>
-<p>Intellectual honesty about limits is the thing that makes expert readers trust documentation. Here is what this framework does not do:</p>
-<p><strong>No evaluation harness yet.</strong> There is no automated way to measure per-category accuracy. Quality assurance relies on the review queue (0.3% of records flagged for human inspection) and spot-checks. A gold set comparison — comparing predictions against known-correct labels — is on the roadmap but not implemented.</p>
-<p><strong>Sequential processing only.</strong> Records are processed one at a time. There is no parallelism across rows. This is a deliberate trade-off: simplicity of checkpoint correctness and predictable resource usage on a laptop outweigh the complexity of parallel processing.</p>
-<p><strong>Similarity thresholds require dataset-specific calibration.</strong> The 0.975 semantic threshold and 0.96 fuzzy threshold were tuned for incident ticket text. Different datasets — shorter texts, more structured fields, different vocabulary distributions — may need different values. Starting conservative and loosening after sampling is the recommended approach.</p>
-<h2>The Transferable Insight</h2>
-<p>The design pattern here is not classifier-specific. Any system that needs to process large volumes of similar inputs with an expensive AI model benefits from the same structure:</p>
-<ol>
-<li>Define a waterfall of strategies ordered by cost and determinism</li>
-<li>Apply strict quality guards before any reuse decision</li>
-<li>Treat the LLM as the last resort, not the first</li>
-<li>Make every decision auditable: which strategy was used, how confident, how similar the match</li>
-</ol>
-<p>The engineering discipline — circuit breakers, checkpoint atomicity, bounded caches, crash-safe deduplication — is what separates a demo from a production system. These are not AI engineering problems. They are software engineering problems that only appear when AI is embedded in a real pipeline.</p>
-<p>The "AI skill" in this project was not writing better prompts. It was designing the system around the model, not the model into the system.</p>
-<h2>Limits / when not to use</h2>
+<p>This was a reclassification run against a new taxonomy. The caches were cold at the start. In a steady-state run against a stable taxonomy, the reuse layers would likely handle a much larger share.</p>
+<p>One caveat: the operational metrics above described throughput and pipeline mechanics, not classification accuracy. In the resumed segment, an uncalibrated LLM classified over half the rows with no gold-set comparison, and the reuse layers propagated the quality of those decisions. There was no evaluation harness or labelled example set yet, so the output distributions are directional rather than definitive.</p>
+<p>Cache warming was not linear. The first slice of a cold run was always slowest because almost everything hit the LLM. As the fingerprint cache filled with the most common templates and the semantic cache started to recognise recurring problem descriptions, the hit rate climbed and the LLM handled a shrinking fraction of rows.</p>
+<p>The review queue was the other practical signal. In this run it was 204 records (0.3%). Some of those were true low-confidence cases. Others were records that were not really incident descriptions at all, such as IT support emails with human-to-human back-and-forth. The point was not whether 204 was "good" or "bad". The point was that the pipeline produced a bounded worklist a human could actually review, instead of hiding uncertainty inside the bulk output.</p>
+<h2>What it does not do (yet)</h2>
 <ul>
-<li>If your taxonomy is unstable or political, the review workload will move from labeling to arguing.</li>
-<li>Similarity reuse (fingerprints, embeddings) is domain-dependent; thresholds that work for one corpus will not generalise unchanged.</li>
-<li>Local inference is a constraint choice, not a free win; throughput depends heavily on hardware and output schema.</li>
+<li>The run did not measure per-category accuracy. There was no evaluation harness or gold-set comparison yet.</li>
+<li>The implementation did not build a successor classifier (distill high-confidence labels into a fast encoder for future runs).</li>
+<li><code>confidence_score</code> was categorical rather than calibrated. It worked as a contract field, not as a measurement.</li>
+<li>The pipeline processed sequentially. Ollama blocked on a single request per model, so this build had no row-level parallelism.</li>
+<li>The implementation selected one text field rather than voting across fields. A quorum policy existed in config, but the agent did not implement it in this version.</li>
+<li>The similarity thresholds were tuned for incident ticket language. Other datasets would have needed calibration.</li>
+<li>Reuse assumed taxonomy stability. Every cached decision stayed valid only while the taxonomy that produced it stayed current.</li>
 </ul>
+<h2>The transferable insight</h2>
+<p>The reuse waterfall was the visible part. What made it usable in a privacy-constrained environment was everything around it: content-safe telemetry, checkpointing, and failure handling. Those artefacts let the coding agent diagnose and tune the run from evidence rather than from ticket text.</p>
+<p>That was the operating pattern underneath the implementation. The agent could watch throughput by strategy, cache hit rates, circuit breaker trips, and checkpoint state, then adjust thresholds, selection policy, or output shape without the incident text leaving the machine or entering the agent's context.</p>
 <h2>Repro notes</h2>
 <ul>
-<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; local inference (Ollama) <code>qwen2.5:7b</code>; embeddings <code>nomic-embed-text</code>; bulk output cap <code>bulk_num_predict: 128</code> (standard <code>num_predict: 600</code>); strict JSON schema enabled</li>
+<li>Run conditions: 2026-04; Apple M3 Pro MacBook, 18GB RAM; classification LLM <code>qwen2.5:7b</code> via Ollama; embedding model <code>nomic-embed-text</code> via Ollama; <code>bulk_num_predict: 128</code></li>
 <li>Dataset class: enterprise incident backlog (63,053 records; anonymised; no client identifiers)</li>
-<li>Non-reproducible from this article: exact prompt schemas, proprietary taxonomies, and internal contracts</li>
+<li>This article does not include the exact prompt schemas or taxonomy definitions</li>
 </ul>
+<h2>Key takeaways</h2>
+<ul>
+<li>The implementation kept deterministic and similarity paths first and pushed the LLM to the end of the chain.</li>
+<li>The reuse waterfall turned "LLM-per-record" into "LLM-per-new-pattern".</li>
+<li>At this scale, the hard problems were operational: cache seeding, circuit breakers, and crash-safe resume.</li>
+</ul>
+<p><em>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</em></p>
 
 </body>
 </html>
