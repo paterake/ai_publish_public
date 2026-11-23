@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>I Approved Claude Code's Recommendations. Then I Reverted Them.</h1>
+<p>Image created by the author using Midjourney</p>
+<p><em>Approved on your recommendation. The coding agent wrote the question, the options and the answer, and I signed it.</em></p>
+<p>I handed some work from Claude Code to Trae and asked Trae why it had not turned out the way I expected. It said the work had followed my instructions. Those instructions were yeses I had given to options Claude Code wrote and recommended.</p>
+<p>If you direct AI coding agents, you approve options they wrote, and the agent marks one "(Recommended)". It records your answer as your decision, and the next agent reads it as your intent, which makes your approval the weakest control in the loop.</p>
+<p>I call the failure Coding Agent Recommendation Bias and Fatigue. You approve a recommendation that you later have to undo, and the same kind of approval comes round again. Or the agent's framing leaves you without the facts to decide, and nobody lists the unknowns. When the asks keep coming, you pick the recommended option to keep the work moving.</p>
+<p>There is no fix for this that I know of. Ask too often and I approve unread; approve in advance and I approve unread anyway. Give me every fact and every gap, and there is more than I can absorb, so I fall back on the option marked "(Recommended)". The cases below come from six weeks of my own commit history.</p>
+<h2>An approval becomes your intent</h2>
+<p>Coding agents keep notes. Mine write my decisions into commit messages and backlog files, quoting my words, and each new agent reads those files first so it does not undo what I decided. Then an agent records its pick as my decision. After that, every agent treats it as my instruction.</p>
+<p>I was replacing code my agents had written by hand with established open-source libraries. Along the way an agent recommended that each library produce exactly the same output as the code it replaced, byte for byte. Later agents read that as my rule. They held every replacement to it, even when the library did more than the old code. Meeting it could mean weakening the library to match.</p>
+<p>When I found it on 3 November, I wrote: "it was not my rule - that is something an agent recommended". The same day I replaced it: "dont weaken a potential improvement by adopting OSS just to meet what was previously built if it produces more".</p>
+<p>That one took a single message to fix, because it was only a rule. Undoing an approval that other work had already been built on took far more than a message.</p>
+<h2>Approved, then undone</h2>
+<p>In October I asked my agents to connect an outside AI service through the integration it already provides. They came back with a plan to build their own layers around it instead, and I approved it. On 13 October, when I saw the result, I called it bloat, and my agents took the work out again. My incident report counts six reverts in one repository, all on one branch not yet landed on main at the time. In another, my agents added 121 lines and withdrew them the same day. I had the episode written up afterwards the way you would a production incident, and the report named me as the root cause: "the operator approved a plan they later called noise."</p>
+<p>That same night I left a standing instruction, "all recommended actions approved", so the work could carry on without me. An agent took it as approval to add a list of shared terms to my configuration repository, which must not be tied to any one project. The next morning I had it taken out.</p>
+<p>Two agents can also undo each other, each citing my approval. On 20 October at 16:05 one agent added a list of files that must stay identical across my repositories, with a test that fails if they drift apart. It cited my approval that day. At 16:29 a different agent deleted both, also citing my approval that day.</p>
+<p>The same day an agent proposed retiring my working method, the set of rules every one of my agents loads before it starts. Part of its case was that the tool delivering those rules was not installed. I approved. Two days later I wrote "bring it back as it was". The tool was missing only because I had moved to a new machine.</p>
+<h2>When the asks pile up</h2>
+<p>Every ask is a small interruption, and they add up. My agents keep a fixed set of tests for what each project delivers, and any change to that set needed my approval. Those asks reached me on 3, 9, 10 and 11 November. On 16 November I wrote that I did not want to be involved in managing the test catalogue at all, and asked "why is then still coming back to me".</p>
+<p>Claude Code agents mark their own pick "(Recommended)". After enough asks I stopped choosing and started copying. On 23 October my whole reply was "Approve both (Recommended)", the label word for word. On 5 November, by a search of the commit messages, 10 of the 29 commits in one repository recorded my answer as "approved on your recommendations".</p>
+<p>So I tried approving in bulk. On 17 November I told an agent: "as my proxy you can act on the operators behalf to approve any work that needs to be carried out as per the recommended approaches". The next day one line from me, "Approved on your recommendations", cleared out my finished backlog files, and that night "yes to all recommended actions" approved a fix for references in my docs to files that no longer existed.</p>
+<p>My own rules had warned about this since 11 October: "each unnecessary interruption trains the operator to approve without reading". I took that to mean fewer interruptions. But approving in advance, or letting an agent approve for me, still has me agreeing to things I have not read.</p>
+<h2>On a phone, the fix made it worse</h2>
+<p>I often direct my agents from a phone while they run in the cloud. One agent coordinates the work and hands pieces of it to other agents, each running on its own.</p>
+<p>On 14 November I wrote: "I am working off a mobile phone. The screen is that of a mobile phone. So I can't absorb the information you present here. It's needs to be more concise and just specific to any asks you want from me. I don't need details." In the same message I told the agents to settle the judging and the recommendations among themselves. Earlier that day I had approved, in advance, whatever the coordinating agent decided and recommended.</p>
+<p>After that, the asks that still reached me came without their detail, so the recommended option was the easiest answer, and often the only one I could weigh.</p>
+<p>The phone also made it hard to tell which agent I was answering. The app lists each running agent by name and cuts long names short, so the coordinating agent looked like the agents it had started. It was too easy to reply to the wrong one. The agents then gave each one a short label that starts with what tells it apart. Until then, a yes typed on the phone could reach an agent whose question I had not read.</p>
+<h2>A yes on a reading nobody checked</h2>
+<p>This form is the hardest to see, because the agent had written down the fact I needed, in notes I never opened.</p>
+<p>My repositories have a guard that stops agents reading any file that contains an email address. On 21 November it blocked the file that tracks where my articles are submitted. The agent could not do its work. It asked me to exempt that file. The reason it gave was a guess about the blocked line, probably a link to my public profile, which hiding the address would break.</p>
+<p>In its own notes the agent had written that the guess was "not yet confirmed". The question it sent me left that out and said only "probably". I answered "Approved on your recommendation". The agent granted the longest exemption allowed, 90 days.</p>
+<p>The line was a publication's submission email address in a notes field. The guess was wrong, and neither the agent nor I had checked it.</p>
+<p>The cost was small, one file exempted for three months. I keep the case because every step is on record: the guess, the note that it was unconfirmed, the question that said only "probably", my yes and the wrong reading. The agent knew it had not checked, and its question did not tell me.</p>
+<h2>What I now ask of my agents</h2>
+<p>I can't make myself read every ask carefully, least of all on a phone. So I have stopped relying on that, and I ask the agents to carry more of it.</p>
+<p>Before you bring me a plan, check it against what I have actually said. My agents already do this. They do it only for big decisions such as deletes and changes of scope, so the everyday recommendation skips it. The check also trusts my recorded words. That includes the yeses I gave without reading.</p>
+<p>Treat my yes as covering only what you asked. My rules already say this, but only when one agent passes my answer on to another.</p>
+<p>When you mark an option "(Recommended)", tell me in one line what it leaves out and what you have not confirmed. I have found nothing that asks for this yet. If something had, the guard exemption would have put "not yet confirmed" in the question, in place of a bare "probably". It has to stay one line, or it becomes one more thing I don't read.</p>
+<p>My other controls aim at fewer asks instead. They batch asks into one message and cut them to a few lines for a phone. One approval at the start of a long run can also cover its normal work. That moves the unread approval earlier, the same as my standing approvals did. I have found nothing that tracks which approvals were later reverted, or counts how often I take the recommended option. One agent reviews every change before any commit, and the nearest item on my to-do list would have me spot-check that reviewer's verdicts. When it came up, I parked it with "TODO item only (Recommended)".</p>
+<p>The pattern kept going after earlier rules I added, so I treat these requests as one more attempt.</p>
+<h2>Limits</h2>
+<ul>
+<li>The cases come from commit messages and backlog files in my own repositories, from 11 October to 21 November, and from one operator: me.</li>
+<li>The quotes are my words as my agents recorded them. A record of an agent quoting my approval shows the approval was claimed. It cannot show what I had in front of me when I gave it.</li>
+<li>In the repository I counted most closely (not the one with the six reverts above), no commit uses git's own revert command. The reversals there were new edits, so my counts are minimums.</li>
+<li>I have not counted the approved recommendations that held, so this shows a recurring pattern and gives no rate.</li>
+<li>I have not measured whether these asks work.</li>
+<li>The Trae exchange that opens this article is my own account and is not in my commit history.</li>
+</ul>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
+
+</body>
+</html>
