@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>The Principle of Least Context: How My Agents Deliver Without Me in the Middle</h1>
+<p>Image created by the author using Midjourney</p>
+<p>A chain of coordinating agents landed about 260 commits for me across two major refactors, and the first run needed me only twice: once at a cap on director generations, once when a director hit its shell-call limit. Reaching that result is hard because a coding agent starts each session with no memory of the last one, grades its own work too kindly, and is supervised by a person who accepts far more prompts than they can read. Security engineering solved over-broad trust long ago with least privilege, giving each process only the access its job needs. I built a delivery harness around those facts and applied that principle to what an agent knows.</p>
+<h2>Where this work sits</h2>
+<p>Four branches of practice have grown up around coding agents:</p>
+<ul>
+<li><strong>Context engineering</strong> decides what a model sees for a task: the instructions, files, memory and facts that go into its context window, and what stays out.</li>
+<li><strong>Loop engineering</strong> shapes the cycle an agent runs inside one session: plan, act, check and repeat until the task is done, with tests and checks closing each turn.</li>
+<li><strong>Harness engineering</strong> builds the environment around the agent: the controls, roles, records and routing that decide what it may do and what counts as done.</li>
+<li><strong>An agentic SDLC</strong> is the delivery lifecycle itself, from intent to landed and verified change, carried out by agents while people set intent and own decisions.</li>
+</ul>
+<p>This article proposes no new branch. It reports a working method that draws on all four. Context and loop engineering do their work inside one session. What I needed sat between sessions: carrying a multi-agent delivery across session limits at agent speed. The harness is the answer, and it supplies the delivery engine an agentic SDLC needs, though I did not design it as one.</p>
+<h2>Where long agent runs break</h2>
+<p>Context is finite and it degrades. My sessions filled up mid-backlog, so a hook now warns at 250,000 context tokens, 150 turns or 120 shell calls. Sessions also hit hard limits on shell calls and usage, and a subagent's requests count toward its parent session's limits. Continuity is lossy: when Claude Code compacts a session, or I restart one, detail that proves important later can go, and a self-reported finish is weak evidence. Across six days of my own session logs the reviewer sent back 56% of 768 changes at least once before passing them, grouping verdicts into changes by inference from session order. With successor directors and the relay in place I saw 176 commits and about 450 reviewer verdicts a day, more than I could read, so without a gate review would have become a formality.</p>
+<h2>Why I built it</h2>
+<p>Context and loop engineering fixed much of this inside each session, but sessions still hit limits mid-run and the work stopped until I moved it. I copied prompts and replies between agents in different repositories, opened a fresh session after every finished backlog item, and relaunched stalled directors by hand.</p>
+<p>I wanted agent-speed delivery, with me setting intent and owning decisions. The harness took five weeks, and each step took a join off my hands:</p>
+<ul>
+<li>11 October: a commit gate that refuses any commit without an independent reviewer's PASS, with a proposed fleet approach for routing work across repositories.</li>
+<li>Next, cross-session messaging, so agents in different repositories message each other directly.</li>
+<li>13 October: a session-length hook turned the main session into a director that coordinates workers through a backlog.</li>
+<li>22 October: routing follows each session's shell-call budget.</li>
+<li>12 November: a director near its limit launches its own successor, and a lock refuses commits, pushes to main and dispatches from other sessions while a director holds it.</li>
+<li>13 November: my own session became a relay that never directs, carrying my one approval per run and a check on who is speaking for me.</li>
+<li>14 November: the repository's own configuration carries the commit gate and the reviewer into cloud sessions, and the relay sends me only short asks naming the session to act in, so I can run cloud sessions from my phone.</li>
+</ul>
+<h2>Least context and checked crossings</h2>
+<p>Across those steps one rule held: each session holds only what its role needs and build detail stays in the session that did the build, which keeps it inside its limits and away from the degraded end of its context. Nothing moves between sessions on trust: intent, approvals, reviewed content and run state each cross with a check the receiving side runs for itself.</p>
+<p>[TABLE PLACEHOLDER: add assets/table_02-session-roles.png here. Caption: Who holds what: each session's model, what it holds and what it never holds. Credit: table made by the author.]</p>
+<h2>One run, start to handoff</h2>
+<p>A run starts when I give the relay a task.</p>
+<ol>
+<li>The relay does work that fits one session itself. Anything larger goes to a background director.</li>
+<li>Before it starts, I give one short approval for the whole run. It names what the director may delete and decide without asking, with the limit on each, and the items that always come back to me. Anything else returns as one batched question.</li>
+<li>The director claims a lock, so other sessions cannot commit, push to main or dispatch while it holds it. It reports any untrusted repository to me, because Claude Code refuses to start a background session in one.</li>
+<li>The director accepts my words only if the platform's sender frame matches the relay on record. A relay move needs a handover line the director checks, and one line from me reverses it.</li>
+<li>For each slice, the director writes a brief that quotes my words and starts a background worker on Sonnet in its own worktree. The worker runs a change loop of design, review, build and review, scaled to the risk tier and capped at four rounds, and pushes its own branch, never main.</li>
+<li>The reviewer's verdict must read <code>VERDICT: PASS tree=&lt;hash&gt;</code>. A hook records it only if the hash equals the current <code>git write-tree</code>. A second hook refuses any commit without a recorded PASS for that exact tree. A failed slice is redone from main at most twice, then reported.</li>
+<li>A worker's summary is a claim, so the director fast-forwards main to the exact reviewed commit, re-runs the validators, removes the branch and worktree, and starts the next slice.</li>
+<li>When the director nears its limits, it lands or stops its workers and commits a handoff record through the same reviewer: my delegation quoted verbatim, what has landed, next steps, failed approaches with the reason each failed, and an authority order that puts my latest words first. It releases the lock and launches a successor with the next generation number, and a dispatch gate refuses a launch that skips a generation, passes the cap, or comes before main has moved. The successor claims the lock and distrusts the record, comparing main with the landed list and labelling anything it cannot confirm as unverified.</li>
+</ol>
+<p>In the first November run the eleventh director hit its shell-call limit, and I launched the twelfth by hand. That failure became the shell-call band in the session-length hook, which counts subagents' calls too.</p>
+<p>[FIGURE PLACEHOLDER: add assets/figure_01-director-flow.png here. Caption: One run, end to end: the operator gives a task and one approval for the run, a background director dispatches workers slice by slice, each landed only after a reviewer PASS on the staged tree. Credit: figure made by the author.]</p>
+<p>The gates in this flow are hooks because Claude Code applies a deterministic control such as a hook or a deny rule every time, whatever the model decided to do. A review that relies on the agent remembering fades over a long session, and a blocking hook needs <code>onFailure: block</code> so a crashed or timed-out gate blocks the commit. Untrusted input has a reviewer check and no hook: anything an agent reads counts as data, and the reviewer sends back a change whose only justification is something the agent read.</p>
+<h2>What Claude Code gives and what I built</h2>
+<p>Claude Code now provides much of the plumbing natively: background sessions, worktrees and cross-session messaging, where another session's message never counts as consent. Agent teams are experimental and off by default, and Code Review is advisory, so it never approves or blocks a pull request.</p>
+<p>I deleted several pieces I wrote myself in favour of native ones. A worker launched into an untrusted repository exits with Claude Code's own error, so the harness only reports the repository. Cloud sessions load the working-method rule natively, and per-tool-call telemetry comes from Claude Code's own OpenTelemetry.</p>
+<p>What I built is the commit gate, the dispatch gate, the director lock, the handoff check, the one approval per run and the sender check, and I kept my gate-refusal reason codes because they have no native equivalent. With the fleet skill, the approach document, the change-loop workflow and the telemetry scripts, the whole harness comes to about a thousand lines.</p>
+<h2>What it has delivered</h2>
+<p>The first November run moved shared configuration out of a configuration repository and into a GenAI engine as module defaults. The second moved a repository the other way, from code it had grown itself toward adopted open-source tools that do the same work. In the week to 12 November there were 410 commits across 14 repositories, all under my single git identity.</p>
+<p>Across 11 to 12 November and 16 to 18 November, the two runs landed about 260 commits through fourteen director handoffs, and the relay itself changed hands as each run went on. Every change needed a recorded PASS for its exact tree before it could commit, and the second run closed only when the reviewer's ninth whole-run review passed.</p>
+<p>In the first run the eighth director reached the generation cap of five, so I started the next director, and a later harness commit raised the cap to 20. That stop and the eleventh director's limit were the only points the run needed me. On 13 November a director reached the warning, wrote its handoff, and its successor took over unattended and committed the record first.</p>
+<p>[TABLE PLACEHOLDER: add assets/table_03-commits-per-day.png here. Caption: Commits a day rose as each stage of the harness arrived, from 20 before the harness to 176 once successor directors and the relay were in place. The final row is the mid-November run, about 100 a day on its own repository. Credit: table made by the author.]</p>
+<p>Git shows no revert among the 2,381 commits from 12 September to 13 November, though a defect fixed forward would not show as one.</p>
+<p>[TABLE PLACEHOLDER: add assets/table_04-session-telemetry.png here. Caption: Six days of session logs, either side of the successor directors arriving. Credit: table made by the author.]</p>
+<p>In the session logs from 2 to 20 November the reviewer returned about 2,700 verdicts, sent the work back in 46% of them and escalated under 1% to me. One change can collect several verdicts, which is why the 56% earlier counts changes. In the same window the commit gate refused 386 commit attempts, for reasons from a missing PASS to command forms it will not judge and the director lock.</p>
+<p>The reviewer also checked writing about the harness. On 12 November it sent back the notes for an article about it because they said telemetry did more than record, and that a hook enforced two controls when the harness had four. The session corrected them before the commit.</p>
+<p>Checks also reached my approvals. On 16 November a relay passed on my yes to a fix that would remove the repository copies of the reviewer. A decision check found the recommendation left out a consequence: in a cloud session those copies were the only reviewer, so cloud work could no longer commit. My approval covered only the change its question named, so the harness session put the choice back to me with the consequence stated, and I chose a different fix.</p>
+<h2>Limits</h2>
+<ul>
+<li>The commit gate cannot catch forgery. A <code>--no-verify</code> commit, a merge, a cherry-pick and my own shell commits sit outside it unless a repository opts into a git-level backstop. The harness proves the hash and cannot vouch for the reviewer's judgment.</li>
+<li>The hook-enforced controls (commit gate, dispatch gate, director lock, opt-in work-id lint, cloud add-repo gate) all run on Claude Code. The director lock fails open when <code>claude</code> or <code>jq</code> is missing or an override variable is set, and it lapses when its holder is stale (12 hours by default). The shell-command hooks match command text, so unrecognised forms pass: a quoted path to git and, untested, an environment-variable prefix, <code>git</code> inside <code>bash -c</code>, or <code>git</code> through a variable or alias; git called by path is matched, tested only outside a live session. A launch without the generation variable escapes the loop guard. The session-length hook only warns, and handing off is guidance. The unattended handoff has worked once, the sender check has seen only genuine senders, and a relay move, even one an agent makes from an interactive terminal, is detected and reversible by one line from me but not prevented.</li>
+<li>Commit counts mix in a second machine under the same git identity, and much of 12 November is one run, so the stages do not show that one caused the other. The logs include build-time probes, and a REVISE records a required change, which may not be a defect.</li>
+<li>The reviewer is a fresh, read-only context bound to the staged tree, but it is Opus judging mostly Sonnet work, so it may share the author's blind spots. I have not measured its effectiveness or whether it improves the code, and no rule has humans review a sample of PASS verdicts.</li>
+<li>I have no token or cost figures and no human-team baseline. The engine's closure rests on public sample repositories, and the evidence is one operator on private repositories.</li>
+</ul>
+<h2>Key takeaways</h2>
+<ul>
+<li>Single-session fixes leave the boundaries between sessions, and at agent speed those joins set the pace.</li>
+<li>Give each session only what its role needs, and make every crossing a check the receiving side runs.</li>
+<li>Bind the reviewer's verdict to the exact staged tree and enforce it with a hook, because instructions fade over a long session.</li>
+<li>Count how many of your agent commits could land today with no independent review.</li>
+</ul>
+<p>AI Disclosure: The author originated, researched, and drafted this content from direct implementation experience. AI was used solely to refine prose and formatting.</p>
+<h2>Further reading</h2>
+<ul>
+<li><a href="https://medium.com/@emailrak/vibe-coding-safeguards-how-to-trust-ai-assistants-without-slowing-down-9ff667f4c252">Vibe Coding Safeguards: How to Trust AI Assistants Without Slowing Down</a></li>
+<li><a href="https://medium.com/@emailrak/the-backlog-continuity-contract-how-to-make-ai-work-resumable-across-sessions-b013e6a4c0b0">The Backlog Continuity Contract: How to Make AI Work Resumable Across Sessions</a></li>
+<li><a href="https://medium.com/generative-ai/how-shared-governance-stops-ai-agents-forgetting-a82b9181c8a4">How Shared Governance Stops AI Agents Forgetting</a></li>
+</ul>
+
+</body>
+</html>
